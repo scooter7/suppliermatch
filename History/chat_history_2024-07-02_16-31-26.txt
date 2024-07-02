@@ -1,0 +1,7 @@
+User: list companies in Gardena
+
+Bot: Company 1015, Gardena, Los Angeles, 90248, N, 7, , , , up to $1M, Class 1, Consumer Products Manufacturing Suppliers Professional Services, Other Miscellaneous Nondurable Goods Merchant Wholesalers, Consumer Products
+
+Company 1320, Gardena, Los Angeles, 90248, N, 45, , 10,656,000.00, 22,500,000.00, 26,275,000.00, $10M to $50M, Class 3, Automotive, Marketing Consulting Services, Automotive
+
+Company 907, GARDENA, Los Angeles, 90248, I, 10, , , , $10M to $50M, Class 3, Transportation, Freight Transportation Arrangement, Transportation
