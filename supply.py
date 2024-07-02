@@ -1,68 +1,131 @@
-import google.generativeai as genai
-import pandas as pd
-import json
-import typing_extensions
+import os
 import streamlit as st
+import requests
+import pandas as pd
+from io import BytesIO
+from langchain.text_splitter import CharacterTextSplitter
+from langchain.embeddings import OpenAIEmbeddings
+from langchain.vectorstores import FAISS
+from langchain.chat_models import ChatOpenAI
+from langchain.memory import ConversationBufferMemory
+from langchain.chains import ConversationalRetrievalChain
+from htmlTemplates import css, bot_template, user_template
+from datetime import datetime
+import base64
 
-# Use Streamlit secrets for API key
-api_key = st.secrets["gemini_api_key"]
+CSV_URL = "https://raw.githubusercontent.com/scooter7/suppliermatch/main/docs/csv_data.csv"
+GITHUB_HISTORY_URL = "https://api.github.com/repos/scooter7/ask-multiple-pdfs/contents/History"
 
-# Gemini
-genai.configure(api_key=api_key)
-model_pandas = genai.GenerativeModel('gemini-1.5-flash-latest', system_instruction="You are an expert python developer who works with pandas. You make sure to generate simple pandas 'command' for the user queries in JSON format. No need to add 'print' function. Analyse the datatypes of the columns before generating the command. If unfeasible, return 'None'. ")
-model_response = genai.GenerativeModel('gemini-1.5-flash-latest', system_instruction="Your task is to comprehend. You must analyse the user query and response data to generate a response data in natural language.")
-
-# Response Schema
-class Command(typing_extensions.TypedDict):
-    command: str
-
-# Streamlit
-st.title('Gemini for CSV')
-st.write('Talk with your CSV data using Gemini Flash!')
-
-# Add File
-uploaded_file = st.file_uploader("Choose a file")
-if uploaded_file is not None:
-    df = pd.read_csv(uploaded_file)
-    head = str(df.head().to_dict())
-    desc = str(df.describe().to_dict())
-    cols = str(df.columns.to_list())
-    dtype = str(df.dtypes.to_dict())
+def main():
+    # Set page config
+    st.set_page_config(
+        page_title="Carnegie Artificial Intelligence - CAI",
+        page_icon="https://www.carnegiehighered.com/wp-content/uploads/2021/11/Twitter-Image-2-2021.png"
+    )
     
-    # User Query
-    if "messages" not in st.session_state:
-        st.session_state["messages"] = [{"role": "assistant", "content": "How can I help you?"}]
+    # Hide the Streamlit toolbar
+    hide_toolbar_css = """
+    <style>
+        .css-14xtw13.e8zbici0 { display: none !important; }
+    </style>
+    """
+    st.markdown(hide_toolbar_css, unsafe_allow_html=True)
 
-    for msg in st.session_state.messages:
-        st.chat_message(msg["role"]).write(msg["content"])
-   
-    if user_query := st.chat_input():
-        st.session_state.messages.append({"role": "user", "content": user_query})
-        st.chat_message("user").write(user_query)
+    st.write(css, unsafe_allow_html=True)
+    header_html = """
+    <div style="text-align: center;">
+        <h1 style="font-weight: bold;">Carnegie Artificial Intelligence - CAI</h1>
+        <img src="https://www.carnegiehighered.com/wp-content/uploads/2021/11/Twitter-Image-2-2021.png" alt="Icon" style="height:200px; width:500px;">
+        <p align="left">Hey there! Just a quick heads-up: while I'm here to jazz up your day and be super helpful, keep in mind that I might not always have the absolute latest info or every single detail nailed down. So, if you're making big moves or crucial decisions, it's always a good idea to double-check with your awesome manager or division lead, HR, or those cool cats on the operations team. And hey, if you run into any hiccups or just wanna shoot the breeze, hit me up anytime! Your feedback is like fuel for this chatbot engine, so don't hold back—give <a href="https://form.asana.com/?k=6rnnec7Gsxzz55BMqpp6ug&d=654504412089816">the suggestions and feedback form </a>a whirl! The text entry field will appear momentarily.</p>
+    </div>
+    """
+    st.markdown(header_html, unsafe_allow_html=True)
+    if 'conversation' not in st.session_state:
+        st.session_state.conversation = None
+    if 'chat_history' not in st.session_state:
+        st.session_state.chat_history = []
+    csv_data = get_csv_data()
+    if csv_data is not None:
+        text_chunks = get_text_chunks(csv_data)
+        if text_chunks:
+            vectorstore = get_vectorstore(text_chunks)
+            st.session_state.conversation = get_conversation_chain(vectorstore)
+    user_question = st.text_input("Ask CAI about anything Carnegie:")
+    if user_question:
+        handle_userinput(user_question)
+
+def get_csv_data():
+    response = requests.get(CSV_URL)
+    if response.status_code != 200:
+        st.error(f"Failed to fetch CSV data: {response.status_code}, {response.text}")
+        return None
+    csv_data = response.content.decode('utf-8')
+    return csv_data
+
+def get_text_chunks(csv_data):
+    text_splitter = CharacterTextSplitter(separator="\n", chunk_size=1000, chunk_overlap=200, length_function=len)
+    chunks = text_splitter.split_text(csv_data)
+    return chunks
+
+def get_vectorstore(text_chunks):
+    if not text_chunks:
+        raise ValueError("No text chunks available for embedding.")
+    os.environ["OPENAI_API_KEY"] = st.secrets["openai_api_key"]
+    embeddings = OpenAIEmbeddings()
+    vectorstore = FAISS.from_texts(texts=text_chunks, embedding=embeddings)
+    return vectorstore
+
+def get_conversation_chain(vectorstore):
+    llm = ChatOpenAI()
+    memory = ConversationBufferMemory(memory_key='chat_history', return_messages=True)
+    conversation_chain = ConversationalRetrievalChain.from_llm(llm=llm, retriever=vectorstore.as_retriever(), memory=memory)
+    return conversation_chain
+
+def modify_response_language(original_response):
+    response = original_response.replace(" they ", " we ")
+    response = original_response.replace("They ", "We ")
+    response = original_response.replace(" their ", " our ")
+    response = original_response.replace("Their ", "Our ")
+    response = original_response.replace(" them ", " us ")
+    response = original_response.replace("Them ", "Us ")
+    return response
+
+def save_chat_history(chat_history):
+    github_token = st.secrets["github"]["access_token"]
+    headers = {
+        'Accept': 'application/vnd.github.v3+json',
+        'Authorization': f'token {github_token}'
+    }
+    date_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    file_name = f"chat_history_{date_str}.txt"
+    chat_content = "\n\n".join(f"{'User:' if i % 2 == 0 else 'Bot:'} {message.content}" for i, message in enumerate(chat_history))
     
-        final_query = f"The dataframe name is 'df'. df has the columns {cols} and their datatypes are {dtype}. df is in the following format: {desc}. The head of df is: {head}. You cannot use df.info() or any command that cannot be printed. Write a pandas command for this query on the dataframe df: {user_query}"
+    encoded_content = base64.b64encode(chat_content.encode('utf-8')).decode('utf-8')
+    data = {
+        "message": f"Save chat history on {date_str}",
+        "content": encoded_content,
+        "branch": "main"
+    }
+    response = requests.put(f"{GITHUB_HISTORY_URL}/{file_name}", headers=headers, json=data)
+    if response.status_code == 201:
+        st.success("Chat history saved successfully.")
+    else:
+        st.error(f"Failed to save chat history: {response.status_code}, {response.text}")
 
-        with st.spinner('Analyzing the data...'):
-            response = model_pandas.generate_content(
-                final_query,
-                generation_config=genai.GenerationConfig(
-                    response_mime_type="application/json",
-                    response_schema=Command,
-                    temperature=0.3
-                )
-            )
+def handle_userinput(user_question):
+    if 'conversation' in st.session_state and st.session_state.conversation:
+        response = st.session_state.conversation({'question': user_question})
+        st.session_state.chat_history = response['chat_history']
+        for i, message in enumerate(st.session_state.chat_history):
+            modified_content = modify_response_language(message.content)
+            if i % 2 == 0:
+                st.write(user_template.replace("{{MSG}}", modified_content), unsafe_allow_html=True)
+            else:
+                st.write(bot_template.replace("{{MSG}}", modified_content), unsafe_allow_html=True)
+        # Save chat history after each interaction
+        save_chat_history(st.session_state.chat_history)
+    else:
+        st.error("The conversation model is not initialized. Please wait until the model is ready.")
 
-            command = json.loads(response.text)['command']
-            print(command)
-        try:
-            exec(f"data = {command}")
-            natural_response = f"The user query is {final_query}. The output of the command is {str(data)}. If the data is 'None', you can say 'Please ask a query to get started'. Do not mention the command used. Generate a response in natural language for the output."
-            bot_response = model_response.generate_content(
-                natural_response,
-                generation_config=genai.GenerationConfig(temperature=0.7)
-            )
-            st.chat_message("assistant").write(bot_response.text)
-            st.session_state.messages.append({"role": "assistant", "content": bot_response.text})
-
-        except Exception as e:
-            st.session_state.messages.append({"role": "assistant", "content": "Error"})
+if __name__ == '__main__':
+    main()
