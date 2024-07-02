@@ -1,0 +1,4 @@
+google-generativeai
+pandas
+typing-extensions
+streamlit
