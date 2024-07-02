@@ -14,7 +14,7 @@ from datetime import datetime
 import base64
 
 CSV_URL = "https://raw.githubusercontent.com/scooter7/suppliermatch/main/docs/csv_data.csv"
-GITHUB_HISTORY_URL = "https://api.github.com/repos/scooter7/ask-multiple-pdfs/contents/History"
+GITHUB_HISTORY_URL = "https://api.github.com/repos/scooter7/suppliermatch/contents/History"
 
 def main():
     # Set page config
