@@ -1,0 +1,7 @@
+User: list class 4 companies
+
+Bot: The Class 4 companies in the provided data are:
+
+1. Company 803 - Financial Services
+2. Company 809 - Manufacturing Suppliers Retail and Apparel
+3. Company 811 - Consumer Products Food and Beverage Transportation
