@@ -1,0 +1,4 @@
+User: there are many companies with at least 30 fulltime employees. Please list them
+
+Bot: Company 4 in Pasadena has 40 fulltime employees.
+Company 26 in Glendale has 176 fulltime employees.
