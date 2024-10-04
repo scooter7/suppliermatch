@@ -1,0 +1,11 @@
+User: manufacturing
+
+Bot: For manufacturing, you can find information on the following companies from the provided context:
+
+1. Company 614 in Lynwood, Los Angeles
+2. Company 355 in City of Industry, Los Angeles
+3. Company 668 in Torrance, Los Angeles
+4. Company 672 in Cerritos, Los Angeles
+5. Company 605 in City of Industry, Los Angeles
+
+These companies are involved in manufacturing based on the description provided.
