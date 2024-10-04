@@ -1,0 +1,3 @@
+User: there are many companies with at least 30 fulltime employees. Please list them
+
+Bot: I don't know.
