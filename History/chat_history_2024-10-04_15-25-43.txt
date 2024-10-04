@@ -1,0 +1,5 @@
+User: there are many companies with at least 30 fulltime employees. Please list them
+
+Bot: Company 4, Pasadena, Los Angeles
+Company 24, Commerce, Los Angeles
+Company 26, Glendale, Los Angeles
