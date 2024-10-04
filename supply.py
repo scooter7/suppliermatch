@@ -35,7 +35,7 @@ def main():
     header_html = """
     <div style="text-align: center;">
         <h1 style="font-weight: bold;">Strategic Insights Supplier Match</h1>
-        <img src="https://strategicinsights.com/wp-content/uploads/2024/04/logo2.png" alt="Icon" style="height:100px; width:800px;">
+        <img src="https://oppaccess.com/integrated-research-platform/wp-content/uploads/2024/04/SI-DSjpg-2.jpg" alt="Icon" style="height:300px; width:500px;">
         <p align="left">Ask about our suppliers!</p>
     </div>
     """
