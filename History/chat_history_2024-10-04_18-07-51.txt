@@ -1,0 +1,3 @@
+User: what company has the highest annual revenue?
+
+Bot: Company 45 from Los Angeles has the highest annual revenue in 2022, with a reported amount of $12,371,000.
