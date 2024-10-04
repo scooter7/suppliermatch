@@ -1,0 +1,3 @@
+User: companies with at least 30 fulltime employees
+
+Bot: Company 4 in Pasadena, Company 220 in Commerce, and Company 222 in Monterey Park have at least 30 full-time employees.
