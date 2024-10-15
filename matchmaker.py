@@ -4,10 +4,9 @@ import requests
 import pandas as pd
 import openai
 from io import BytesIO
-from langchain.text_splitter import CharacterTextSplitter
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.vectorstores import FAISS
-from langchain.chat_models import ChatOpenAI
+from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain_community.chat_models import ChatOpenAI
 from langchain.memory import ConversationBufferMemory
 from langchain.chains import ConversationalRetrievalChain
 from htmlTemplates import css, bot_template, user_template
@@ -78,7 +77,10 @@ def get_csv_data():
     if response.status_code != 200:
         st.error(f"Failed to fetch CSV data: {response.status_code}, {response.text}")
         return None
-    csv_data = response.content.decode('utf-8')
+    # Explicitly set encoding and strip any spaces from column names
+    csv_data = pd.read_csv(BytesIO(response.content), encoding='utf-8')
+    csv_data.columns = csv_data.columns.str.strip()  # Strip spaces from column headers
+    st.write("CSV Columns:", csv_data.columns)  # Debugging: Display the column names
     return csv_data
 
 def extract_scope_of_work(uploaded_file):
@@ -121,10 +123,16 @@ def extract_keywords(text):
 
 def find_matching_providers(keywords):
     # Fetch CSV data
-    csv_data = pd.read_csv(CSV_URL)
-    # Match keywords against Primary Industry in column O
-    matching_providers = csv_data[csv_data['Primary Industry'].apply(lambda industry: any(keyword in industry.lower() for keyword in keywords))]
-    return matching_providers[['Company Name', 'Primary Industry', 'Contact Email']]  # Show relevant columns
+    csv_data = get_csv_data()
+    
+    if csv_data is None:
+        return pd.DataFrame()  # Return an empty DataFrame if fetching the CSV failed
+    
+    # Safely handle missing values and match keywords
+    matching_providers = csv_data[csv_data['Primary Industry'].fillna('').apply(lambda industry: any(keyword in industry.lower() for keyword in keywords))]
+    
+    # Return relevant columns
+    return matching_providers[['Company Name', 'Primary Industry', 'Contact Email']]  # Adjust columns as needed
 
 def get_text_chunks(csv_data):
     text_splitter = CharacterTextSplitter(separator="\n", chunk_size=1000, chunk_overlap=200, length_function=len)
