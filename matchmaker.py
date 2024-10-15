@@ -92,15 +92,18 @@ def summarize_rfp(uploaded_file):
     else:
         return None
 
-    # Summarize the extracted text using OpenAI
+    # Summarize the extracted text using OpenAI with the new API format
     openai.api_key = st.secrets["openai_api_key"]
-    response = openai.Completion.create(
-        engine="text-davinci-003",
-        prompt=f"Please summarize the following text with a focus on the type of work or services being requested:\n\n{text}\n\nSummarize:",
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": "You are an assistant that summarizes RFP documents."},
+            {"role": "user", "content": f"Please summarize the following text with a focus on the type of work or services being requested:\n\n{text}"}
+        ],
         max_tokens=150,
         temperature=0.5
     )
-    summary = response['choices'][0]['text'].strip()
+    summary = response['choices'][0]['message']['content'].strip()
     return summary
 
 def extract_pdf_text(pdf_file):
