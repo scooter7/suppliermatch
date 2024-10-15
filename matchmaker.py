@@ -134,14 +134,37 @@ def extract_docx_text(docx_file):
     return "\n".join([para.text for para in doc.paragraphs])
 
 def find_matching_providers(summary):
-    """Find providers in the CSV that match the summarized scope of work."""
+    """Find providers in the CSV that match the summarized scope of work based on relevant industries."""
     csv_data = get_csv_data()
     if csv_data is None:
         return pd.DataFrame()  # Return an empty DataFrame if fetching the CSV failed
 
-    # Use the summary to find matching providers based on 'Primary Industry'
-    matching_providers = csv_data[csv_data['Primary Industry'].fillna('').apply(lambda industry: summary.lower() in industry.lower())]
-    
+    # Generate a list of relevant industries using OpenAI to map the scope of services to industries
+    openai.api_key = st.secrets["openai_api_key"]
+
+    try:
+        # Ask OpenAI to interpret the summarized scope and suggest relevant industries
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an assistant that recommends industries based on the scope of services."},
+                {"role": "user", "content": f"Based on the following scope of services, suggest relevant industries:\n\n{summary}"}
+            ],
+            max_tokens=100,
+            temperature=0.5
+        )
+
+        # Extract the recommended industries from the OpenAI response
+        recommended_industries = response.choices[0].message.content.strip()
+        st.write(f"Recommended Industries: {recommended_industries}")  # For debugging and display
+
+    except Exception as e:
+        st.error(f"An error occurred with the OpenAI API: {e}")
+        return pd.DataFrame()
+
+    # Filter the companies in the CSV that match any of the recommended industries
+    matching_providers = csv_data[csv_data['Primary Industry'].fillna('').apply(lambda industry: any(rec_industry.lower() in industry.lower() for rec_industry in recommended_industries.split(',')))]
+
     # Display all columns for the matching providers
     return matching_providers
 
