@@ -147,7 +147,7 @@ def find_matching_providers(summary):
     try:
         for index, row in csv_data.iterrows():
             primary_industry = row['Primary Industry']
-            company_name = row['Company Name']
+            company_name = row['Company']  # Updated to use the correct column name
 
             # Ask OpenAI to evaluate if this company is a good match based on its industry and the summarized scope
             response = client.chat.completions.create(
