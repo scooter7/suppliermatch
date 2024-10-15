@@ -1,0 +1,3 @@
+User: you should be querying the csv file to answer that
+
+Bot: I don't have access to the actual data in a CSV file to query and provide an answer.
