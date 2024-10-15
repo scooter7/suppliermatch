@@ -139,34 +139,44 @@ def find_matching_providers(summary):
     if csv_data is None:
         return pd.DataFrame()  # Return an empty DataFrame if fetching the CSV failed
 
-    # Generate a list of relevant industries using OpenAI to map the scope of services to industries
     openai.api_key = st.secrets["openai_api_key"]
 
-    try:
-        # Ask OpenAI to interpret the summarized scope and suggest relevant industries
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are an assistant that recommends industries based on the scope of services."},
-                {"role": "user", "content": f"Based on the following scope of services, suggest relevant industries:\n\n{summary}"}
-            ],
-            max_tokens=100,
-            temperature=0.5
-        )
+    # Initialize an empty list to hold the matching companies
+    matching_providers = []
 
-        # Extract the recommended industries from the OpenAI response
-        recommended_industries = response.choices[0].message.content.strip()
-        st.write(f"Recommended Industries: {recommended_industries}")  # For debugging and display
+    try:
+        for index, row in csv_data.iterrows():
+            primary_industry = row['Primary Industry']
+            company_name = row['Company Name']
+
+            # Ask OpenAI to evaluate if this company is a good match based on its industry and the summarized scope
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are an assistant that helps find companies for specific scopes of services based on their industries."},
+                    {"role": "user", "content": f"Does the company '{company_name}' with the primary industry '{primary_industry}' fit the following scope of services?\n\n{summary}"}
+                ],
+                max_tokens=50,
+                temperature=0.5
+            )
+
+            # Get the decision from the model's response (yes/no answer)
+            decision = response.choices[0].message.content.strip().lower()
+
+            # If OpenAI thinks the company is a good fit, add it to the list of matching providers
+            if 'yes' in decision:
+                matching_providers.append(row)
 
     except Exception as e:
         st.error(f"An error occurred with the OpenAI API: {e}")
         return pd.DataFrame()
 
-    # Filter the companies in the CSV that match any of the recommended industries
-    matching_providers = csv_data[csv_data['Primary Industry'].fillna('').apply(lambda industry: any(rec_industry.lower() in industry.lower() for rec_industry in recommended_industries.split(',')))]
+    # Convert the list of matching providers back to a DataFrame
+    matching_providers_df = pd.DataFrame(matching_providers)
 
-    # Display all columns for the matching providers
-    return matching_providers
+    if matching_providers_df.empty:
+        st.write("No matching companies found.")
+    return matching_providers_df
 
 def get_text_chunks(csv_data):
     # Combine all text in the 'Primary Industry' column into a single string
