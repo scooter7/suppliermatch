@@ -104,8 +104,9 @@ def summarize_rfp(uploaded_file):
     
     # Try-except block to handle any issues with the OpenAI API call
     try:
+        # Using the correct method call (likely `openai.ChatCompletion.create`)
         response = openai.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are an assistant that summarizes RFP documents."},
                 {"role": "user", "content": f"Please summarize the following text with a focus on the type of work or services being requested:\n\n{text}"}
@@ -121,6 +122,7 @@ def summarize_rfp(uploaded_file):
     except Exception as e:
         st.error(f"An error occurred with the OpenAI API: {e}")
         return None
+
 
 def extract_pdf_text(pdf_file):
     reader = PdfReader(pdf_file)
