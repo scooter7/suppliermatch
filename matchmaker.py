@@ -9,6 +9,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_community.chat_models import ChatOpenAI
 from langchain.memory import ConversationBufferMemory
 from langchain.chains import ConversationalRetrievalChain
+from langchain.text_splitter import CharacterTextSplitter  # Import added
 from htmlTemplates import css, bot_template, user_template
 from datetime import datetime
 import base64
