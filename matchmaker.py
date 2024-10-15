@@ -158,20 +158,29 @@ def find_matching_providers(summary):
                 {"role": "system", "content": "You are an assistant that helps find companies for specific scopes of services based on their industries."},
                 {"role": "user", "content": f"Given the following list of companies and their industries, determine which companies would be a good fit for the following scope of work:\n\n{summary}\n\nCompanies:\n{companies_text}"}
             ],
-            max_tokens=500,
+            max_tokens=1000,
             temperature=0.5
         )
 
-        # Extract the list of matching companies from the OpenAI response
-        matching_companies = response.choices[0].message.content.strip().split("\n")
-        st.write(f"Matching Companies: {matching_companies}")
+        # Extract the response content
+        response_text = response.choices[0].message.content.strip()
 
-        # Filter the CSV to return only the matching companies
-        matching_providers_df = csv_data[csv_data['Company'].isin(matching_companies)]
+        # Use regex to extract company numbers or names (assuming the company numbers/names are in the form "Company X")
+        import re
+        matching_companies = re.findall(r'Company\s*(\d+)', response_text)
 
-        if matching_providers_df.empty:
-            st.write("No matching companies found.")
-        return matching_providers_df
+        if matching_companies:
+            st.write(f"Matching Companies: {matching_companies}")  # Debugging: Show the matching companies
+
+            # Filter the CSV DataFrame by matching company numbers
+            matching_providers_df = csv_data[csv_data.index.isin([int(company_num) - 1 for company_num in matching_companies])]
+
+            if matching_providers_df.empty:
+                st.write("No matching companies found.")
+            return matching_providers_df
+        else:
+            st.write("No matching companies extracted from the response.")
+            return pd.DataFrame()
 
     except Exception as e:
         st.error(f"An error occurred with the OpenAI API: {e}")
