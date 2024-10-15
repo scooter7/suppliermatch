@@ -1,0 +1,3 @@
+User: which advertising company had the highest
+
+Bot: I don't have that information.
