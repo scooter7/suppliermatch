@@ -98,13 +98,11 @@ def summarize_rfp(uploaded_file):
     if not text:
         st.error("No text found in the uploaded file.")
         return None
-    
-    # Use the new OpenAI API with ChatCompletion
+
+    # Use the OpenAI API (assuming openai.chat.completions.create exists)
     openai.api_key = st.secrets["openai_api_key"]
-    
-    # Try-except block to handle any issues with the OpenAI API call
+
     try:
-        # Using the correct method call (likely `openai.ChatCompletion.create`)
         response = openai.chat.completions.create(
             model="gpt-4",
             messages=[
@@ -115,14 +113,13 @@ def summarize_rfp(uploaded_file):
             temperature=0.5
         )
         
-        # Extract and return the summary from the OpenAI response
+        # Assuming this structure if openai.chat.completions.create exists
         summary = response['choices'][0]['message']['content'].strip()
         return summary
-    
+
     except Exception as e:
         st.error(f"An error occurred with the OpenAI API: {e}")
         return None
-
 
 def extract_pdf_text(pdf_file):
     reader = PdfReader(pdf_file)
