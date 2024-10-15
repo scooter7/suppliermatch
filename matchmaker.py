@@ -99,12 +99,12 @@ def summarize_rfp(uploaded_file):
         st.error("No text found in the uploaded file.")
         return None
     
-    # Use the new OpenAI API with ChatCompletion (the model you used before: gpt-4o-mini)
+    # Use the new OpenAI API with ChatCompletion (model: gpt-4o-mini)
     openai.api_key = st.secrets["openai_api_key"]
-    
-    # Try-except block to handle any issues with the OpenAI API call
+
     try:
-        response = openai.chat.completions.create(
+        # Create a response using the custom API call structure you've shared
+        response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are an assistant that summarizes RFP documents."},
@@ -114,8 +114,9 @@ def summarize_rfp(uploaded_file):
             temperature=0.5
         )
         
-        # Correct structure from your previous example
-        return response.choices[0].message["content"].strip()
+        # Correct way to handle the response, no subscripting
+        summary = response.choices[0].message["content"].strip()
+        return summary
 
     except Exception as e:
         st.error(f"An error occurred with the OpenAI API: {e}")
