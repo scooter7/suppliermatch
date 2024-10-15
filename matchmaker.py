@@ -224,5 +224,27 @@ def modify_response_language(response_content):
     response = response.replace(" them ", " us ")
     return response
 
+def save_chat_history(chat_history):
+    github_token = st.secrets["github"]["access_token"]
+    headers = {
+        'Accept': 'application/vnd.github.v3+json',
+        'Authorization': f'token {github_token}'
+    }
+    date_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    file_name = f"chat_history_{date_str}.txt"
+    chat_content = "\n\n".join(f"{'User:' if i % 2 == 0 else 'Bot:'} {message.content}" for i, message in enumerate(chat_history))
+    
+    encoded_content = base64.b64encode(chat_content.encode('utf-8')).decode('utf-8')
+    data = {
+        "message": f"Save chat history on {date_str}",
+        "content": encoded_content,
+        "branch": "main"
+    }
+    response = requests.put(f"{GITHUB_HISTORY_URL}/{file_name}", headers=headers, json=data)
+    if response.status_code == 201:
+        st.success("Chat history saved successfully.")
+    else:
+        st.error(f"Failed to save chat history: {response.status_code}, {response.text}")
+
 if __name__ == '__main__':
     main()
