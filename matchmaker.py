@@ -113,17 +113,10 @@ def summarize_rfp(uploaded_file):
             max_tokens=150,
             temperature=0.5
         )
-
-        # Print response structure to debug the subscriptable error
-        st.write(response)  # Debugging to check the structure
-
-        # Ensure the response is accessed correctly, avoiding subscript error
-        if hasattr(response, 'choices'):
-            summary = response.choices[0].message['content'].strip()
-            return summary
-        else:
-            st.error("Unexpected response format from OpenAI API.")
-            return None
+        
+        # Correct way to handle the response (no subscripting)
+        summary = response.choices[0].message.content.strip()
+        return summary
 
     except Exception as e:
         st.error(f"An error occurred with the OpenAI API: {e}")
