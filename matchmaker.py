@@ -17,6 +17,8 @@ import re
 from PyPDF2 import PdfReader
 from docx import Document
 
+client = openai
+
 CSV_URL = "https://raw.githubusercontent.com/scooter7/suppliermatch/main/docs/csv_data.csv"
 GITHUB_HISTORY_URL = "https://api.github.com/repos/scooter7/suppliermatch/contents/History"
 
