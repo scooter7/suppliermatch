@@ -86,7 +86,6 @@ def get_csv_data():
 
 def summarize_rfp(uploaded_file):
     """Summarize the RFP document using OpenAI."""
-    # Extract the text from PDF or Word file
     if uploaded_file.type == "application/pdf":
         text = extract_pdf_text(uploaded_file)
     elif uploaded_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
@@ -94,16 +93,14 @@ def summarize_rfp(uploaded_file):
     else:
         return None
 
-    # Check if the extracted text is available
     if not text:
         st.error("No text found in the uploaded file.")
         return None
 
-    # Use the OpenAI API (assuming openai.chat.completions.create exists)
     openai.api_key = st.secrets["openai_api_key"]
 
     try:
-        response = openai.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are an assistant that summarizes RFP documents."},
@@ -112,9 +109,8 @@ def summarize_rfp(uploaded_file):
             max_tokens=150,
             temperature=0.5
         )
-        
-        # Assuming this structure if openai.chat.completions.create exists
-        summary = response['choices'][0]['message']['content'].strip()
+
+        summary = response.choices[0].message['content'].strip()
         return summary
 
     except Exception as e:
