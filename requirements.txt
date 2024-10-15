@@ -8,3 +8,4 @@ PyPDF2
 python-docx
 datetime
 langchain-community
+tiktoken
