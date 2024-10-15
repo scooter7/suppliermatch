@@ -49,9 +49,9 @@ def main():
     uploaded_file = st.file_uploader("Upload your RFP (PDF or Word)", type=["pdf", "docx"])
     
     if uploaded_file:
-        rfp_text = extract_rfp_text(uploaded_file)
+        rfp_text = extract_scope_of_work(uploaded_file)
         if rfp_text:
-            st.write("Extracted Text from RFP:")
+            st.write("Extracted Scope of Services/Work:")
             st.write(rfp_text)
             keywords = extract_keywords(rfp_text)
             st.write("Extracted Keywords:", keywords)
@@ -81,6 +81,51 @@ def get_csv_data():
     csv_data = response.content.decode('utf-8')
     return csv_data
 
+def extract_scope_of_work(uploaded_file):
+    if uploaded_file.type == "application/pdf":
+        text = extract_pdf_text(uploaded_file)
+    elif uploaded_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+        text = extract_docx_text(uploaded_file)
+    else:
+        return None
+
+    # Extract relevant section based on keywords like 'Scope of Work' or 'Scope of Services'
+    scope_of_work_keywords = ['scope of work', 'scope of services', 'description of services', 'services required']
+    scope_text = extract_section_by_keywords(text, scope_of_work_keywords)
+    
+    return scope_text
+
+def extract_pdf_text(pdf_file):
+    reader = PdfReader(pdf_file)
+    text = ""
+    for page in reader.pages:
+        text += page.extract_text()
+    return text
+
+def extract_docx_text(docx_file):
+    doc = Document(docx_file)
+    return "\n".join([para.text for para in doc.paragraphs])
+
+def extract_section_by_keywords(text, keywords):
+    # Search for relevant keywords in the text and extract the section
+    pattern = '|'.join(keywords)
+    matches = re.findall(rf'(?i)({pattern})(.*?)(?=\n\n|\n\s*\n)', text, re.DOTALL)
+    if matches:
+        return "\n\n".join([match[1].strip() for match in matches])
+    return "Scope of work section not found."
+
+def extract_keywords(text):
+    # Simple keyword extraction using regex
+    keywords = re.findall(r'\b\w{4,}\b', text.lower())  # Extract words with 4+ letters
+    return list(set(keywords))  # Remove duplicates
+
+def find_matching_providers(keywords):
+    # Fetch CSV data
+    csv_data = pd.read_csv(CSV_URL)
+    # Match keywords against Primary Industry in column O
+    matching_providers = csv_data[csv_data['Primary Industry'].apply(lambda industry: any(keyword in industry.lower() for keyword in keywords))]
+    return matching_providers[['Company Name', 'Primary Industry', 'Contact Email']]  # Show relevant columns
+
 def get_text_chunks(csv_data):
     text_splitter = CharacterTextSplitter(separator="\n", chunk_size=1000, chunk_overlap=200, length_function=len)
     chunks = text_splitter.split_text(csv_data)
@@ -99,68 +144,6 @@ def get_conversation_chain(vectorstore):
     memory = ConversationBufferMemory(memory_key='chat_history', return_messages=True)
     conversation_chain = ConversationalRetrievalChain.from_llm(llm=llm, retriever=vectorstore.as_retriever(), memory=memory)
     return conversation_chain
-
-def extract_rfp_text(uploaded_file):
-    # Extract text based on file type
-    if uploaded_file.type == "application/pdf":
-        return extract_pdf_text(uploaded_file)
-    elif uploaded_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-        return extract_docx_text(uploaded_file)
-    return None
-
-def extract_pdf_text(pdf_file):
-    reader = PdfReader(pdf_file)
-    text = ""
-    for page in reader.pages:
-        text += page.extract_text()
-    return text
-
-def extract_docx_text(docx_file):
-    doc = Document(docx_file)
-    return "\n".join([para.text for para in doc.paragraphs])
-
-def extract_keywords(text):
-    # Simple keyword extraction using regex
-    keywords = re.findall(r'\b\w{4,}\b', text.lower())  # Extract words with 4+ letters
-    return list(set(keywords))  # Remove duplicates
-
-def find_matching_providers(keywords):
-    # Fetch CSV data
-    csv_data = pd.read_csv(CSV_URL)
-    # Search for keywords in provider data
-    matching_providers = csv_data[csv_data.apply(lambda row: any(keyword in str(row).lower() for keyword in keywords), axis=1)]
-    return matching_providers
-
-def modify_response_language(original_response):
-    response = original_response.replace(" they ", " we ")
-    response = original_response.replace("They ", "We ")
-    response = original_response.replace(" their ", " our ")
-    response = original_response.replace("Their ", "Our ")
-    response = original_response.replace(" them ", " us ")
-    response = original_response.replace("Them ", "Us ")
-    return response
-
-def save_chat_history(chat_history):
-    github_token = st.secrets["github"]["access_token"]
-    headers = {
-        'Accept': 'application/vnd.github.v3+json',
-        'Authorization': f'token {github_token}'
-    }
-    date_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    file_name = f"chat_history_{date_str}.txt"
-    chat_content = "\n\n".join(f"{'User:' if i % 2 == 0 else 'Bot:'} {message.content}" for i, message in enumerate(chat_history))
-    
-    encoded_content = base64.b64encode(chat_content.encode('utf-8')).decode('utf-8')
-    data = {
-        "message": f"Save chat history on {date_str}",
-        "content": encoded_content,
-        "branch": "main"
-    }
-    response = requests.put(f"{GITHUB_HISTORY_URL}/{file_name}", headers=headers, json=data)
-    if response.status_code == 201:
-        st.success("Chat history saved successfully.")
-    else:
-        st.error(f"Failed to save chat history: {response.status_code}, {response.text}")
 
 def handle_userinput(user_question):
     if 'conversation' in st.session_state and st.session_state.conversation:
