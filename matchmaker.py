@@ -78,10 +78,9 @@ def get_csv_data():
     if response.status_code != 200:
         st.error(f"Failed to fetch CSV data: {response.status_code}, {response.text}")
         return None
-    # Explicitly set encoding and strip any spaces from column names
+    # Read and process the CSV data
     csv_data = pd.read_csv(BytesIO(response.content), encoding='utf-8')
     csv_data.columns = csv_data.columns.str.strip()  # Strip spaces from column headers
-    st.write("CSV Columns:", csv_data.columns)  # Debugging: Display the column names
     return csv_data
 
 def summarize_rfp(uploaded_file):
@@ -99,11 +98,10 @@ def summarize_rfp(uploaded_file):
         st.error("No text found in the uploaded file.")
         return None
     
-    # Use the new OpenAI API with ChatCompletion (model: gpt-4o-mini)
+    # Use OpenAI to summarize the RFP
     openai.api_key = st.secrets["openai_api_key"]
 
     try:
-        # Create a response using the custom API call structure you've shared
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -114,7 +112,6 @@ def summarize_rfp(uploaded_file):
             temperature=0.5
         )
         
-        # Correct way to handle the response (no subscripting)
         summary = response.choices[0].message.content.strip()
         return summary
 
@@ -141,7 +138,6 @@ def find_matching_providers(summary):
 
     openai.api_key = st.secrets["openai_api_key"]
 
-    # Concatenate multiple company industries into a single prompt to process them in a batch
     companies_data = []
     for index, row in csv_data.iterrows():
         company_name = row['Company']
@@ -166,11 +162,10 @@ def find_matching_providers(summary):
         response_text = response.choices[0].message.content.strip()
 
         # Use regex to extract company numbers or names (assuming the company numbers/names are in the form "Company X")
-        import re
         matching_companies = re.findall(r'Company\s*(\d+)', response_text)
 
         if matching_companies:
-            st.write(f"Matching Companies: {matching_companies}")  # Debugging: Show the matching companies
+            st.write(f"Matching Companies: {matching_companies}")
 
             # Filter the CSV DataFrame by matching company numbers
             matching_providers_df = csv_data[csv_data.index.isin([int(company_num) - 1 for company_num in matching_companies])]
@@ -221,6 +216,13 @@ def handle_userinput(user_question):
         save_chat_history(st.session_state.chat_history)
     else:
         st.error("The conversation model is not initialized. Please wait until the model is ready.")
+
+def modify_response_language(response_content):
+    """Modify certain phrases in the bot's response."""
+    response = response_content.replace(" they ", " we ")
+    response = response.replace(" their ", " our ")
+    response = response.replace(" them ", " us ")
+    return response
 
 if __name__ == '__main__':
     main()
