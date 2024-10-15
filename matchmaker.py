@@ -13,7 +13,6 @@ from langchain.text_splitter import CharacterTextSplitter
 from htmlTemplates import css, bot_template, user_template
 from datetime import datetime
 import base64
-import re
 from PyPDF2 import PdfReader
 from docx import Document
 
@@ -59,6 +58,7 @@ def main():
             st.write("Matching Providers (Filtered Company Details):")
             st.write(matching_providers)
 
+    # Add supplier query functionality after the RFP process
     if 'conversation' not in st.session_state:
         st.session_state.conversation = None
     if 'chat_history' not in st.session_state:
@@ -78,7 +78,6 @@ def get_csv_data():
     if response.status_code != 200:
         st.error(f"Failed to fetch CSV data: {response.status_code}, {response.text}")
         return None
-    # Read and process the CSV data
     csv_data = pd.read_csv(BytesIO(response.content), encoding='utf-8')
     csv_data.columns = csv_data.columns.str.strip()  # Strip spaces from column headers
     return csv_data
@@ -98,7 +97,6 @@ def summarize_rfp(uploaded_file):
         st.error("No text found in the uploaded file.")
         return None
     
-    # Use OpenAI to summarize the RFP
     openai.api_key = st.secrets["openai_api_key"]
 
     try:
@@ -217,11 +215,13 @@ def handle_userinput(user_question):
     else:
         st.error("The conversation model is not initialized. Please wait until the model is ready.")
 
-def modify_response_language(response_content):
-    """Modify certain phrases in the bot's response."""
-    response = response_content.replace(" they ", " we ")
-    response = response.replace(" their ", " our ")
-    response = response.replace(" them ", " us ")
+def modify_response_language(original_response):
+    response = original_response.replace(" they ", " we ")
+    response = original_response.replace("They ", "We ")
+    response = original_response.replace(" their ", " our ")
+    response = original_response.replace("Their ", "Our ")
+    response = original_response.replace(" them ", " us ")
+    response = original_response.replace("Them ", "Us ")
     return response
 
 def save_chat_history(chat_history):
