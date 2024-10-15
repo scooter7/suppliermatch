@@ -9,7 +9,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_community.chat_models import ChatOpenAI
 from langchain.memory import ConversationBufferMemory
 from langchain.chains import ConversationalRetrievalChain
-from langchain.text_splitter import CharacterTextSplitter  # Import added
+from langchain.text_splitter import CharacterTextSplitter
 from htmlTemplates import css, bot_template, user_template
 from datetime import datetime
 import base64
@@ -56,7 +56,7 @@ def main():
             keywords = extract_keywords(rfp_text)
             st.write("Extracted Keywords:", keywords)
             matching_providers = find_matching_providers(keywords)
-            st.write("Matching Providers:")
+            st.write("Matching Providers (Company Details):")
             st.write(matching_providers)
 
     if 'conversation' not in st.session_state:
@@ -110,12 +110,12 @@ def extract_docx_text(docx_file):
     return "\n".join([para.text for para in doc.paragraphs])
 
 def extract_section_by_keywords(text, keywords):
-    # Search for relevant keywords in the text and extract the section
-    pattern = '|'.join(keywords)
-    matches = re.findall(rf'(?i)({pattern})(.*?)(?=\n\n|\n\s*\n)', text, re.DOTALL)
+    # Search for relevant keywords in the text and extract the section following the keywords
+    pattern = '|'.join([re.escape(keyword) for keyword in keywords])  # Escape the keywords to avoid regex issues
+    matches = re.findall(rf'(?i)({pattern})(.*?)(?=\n\s*\n|\Z)', text, re.DOTALL)  # Capture until next empty line or end of text
     if matches:
-        return "\n\n".join([match[1].strip() for match in matches])
-    return "Scope of work section not found."
+        return "\n\n".join([f"Section: {match[0]}\n{match[1].strip()}" for match in matches])
+    return "Scope of work or services section not found."
 
 def extract_keywords(text):
     # Simple keyword extraction using regex
@@ -132,8 +132,8 @@ def find_matching_providers(keywords):
     # Safely handle missing values and match keywords
     matching_providers = csv_data[csv_data['Primary Industry'].fillna('').apply(lambda industry: any(keyword in industry.lower() for keyword in keywords))]
     
-    # Return relevant columns
-    return matching_providers[['Company Name', 'Primary Industry', 'Contact Email']]  # Adjust columns as needed
+    # Display all columns of matched providers
+    return matching_providers  # This returns all columns from the CSV
 
 def get_text_chunks(csv_data):
     # Combine all text in the 'Primary Industry' column into a single string
