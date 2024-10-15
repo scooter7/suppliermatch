@@ -7,3 +7,4 @@ faiss-cpu
 PyPDF2
 python-docx
 datetime
+langchain-community
