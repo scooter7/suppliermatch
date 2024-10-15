@@ -102,8 +102,8 @@ def summarize_rfp(uploaded_file):
     
     # Try-except block to handle any issues with the OpenAI API call
     try:
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
+        response = openai.chat.completions.create(
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are an assistant that summarizes RFP documents."},
                 {"role": "user", "content": f"Please summarize the following text with a focus on the type of work or services being requested:\n\n{text}"}
