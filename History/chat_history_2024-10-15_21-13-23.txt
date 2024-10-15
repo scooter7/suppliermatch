@@ -1,0 +1,5 @@
+User: list 3 advertising firms with location
+
+Bot: 1. Company 1593 - Located in Manhattan Beach, Los Angeles
+2. Company 218 - Located in Santa Monica, Los Angeles
+3. Company 1815 - Located in Burbank, Los Angeles
