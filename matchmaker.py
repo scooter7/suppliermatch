@@ -49,14 +49,12 @@ def main():
     uploaded_file = st.file_uploader("Upload your RFP (PDF or Word)", type=["pdf", "docx"])
     
     if uploaded_file:
-        rfp_text = extract_scope_of_work(uploaded_file)
-        if rfp_text:
-            st.write("Extracted Scope of Services/Work:")
-            st.write(rfp_text)
-            keywords = extract_keywords(rfp_text)
-            st.write("Extracted Keywords:", keywords)
-            matching_providers = find_matching_providers(keywords)
-            st.write("Matching Providers (Company Details):")
+        summary = summarize_rfp(uploaded_file)
+        if summary:
+            st.write("Summarized Scope of Work:")
+            st.write(summary)
+            matching_providers = find_matching_providers(summary)
+            st.write("Matching Providers (Filtered Company Details):")
             st.write(matching_providers)
 
     if 'conversation' not in st.session_state:
@@ -84,7 +82,9 @@ def get_csv_data():
     st.write("CSV Columns:", csv_data.columns)  # Debugging: Display the column names
     return csv_data
 
-def extract_scope_of_work(uploaded_file):
+def summarize_rfp(uploaded_file):
+    """Summarize the RFP document using OpenAI."""
+    # Extract the text from PDF or Word file
     if uploaded_file.type == "application/pdf":
         text = extract_pdf_text(uploaded_file)
     elif uploaded_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
@@ -92,11 +92,16 @@ def extract_scope_of_work(uploaded_file):
     else:
         return None
 
-    # Extract relevant section based on keywords like 'Scope of Work' or 'Scope of Services'
-    scope_of_work_keywords = ['scope of work', 'scope of services', 'description of services', 'services required']
-    scope_text = extract_section_by_keywords(text, scope_of_work_keywords)
-    
-    return scope_text
+    # Summarize the extracted text using OpenAI
+    openai.api_key = st.secrets["openai_api_key"]
+    response = openai.Completion.create(
+        engine="text-davinci-003",
+        prompt=f"Please summarize the following text with a focus on the type of work or services being requested:\n\n{text}\n\nSummarize:",
+        max_tokens=150,
+        temperature=0.5
+    )
+    summary = response['choices'][0]['text'].strip()
+    return summary
 
 def extract_pdf_text(pdf_file):
     reader = PdfReader(pdf_file)
@@ -109,31 +114,17 @@ def extract_docx_text(docx_file):
     doc = Document(docx_file)
     return "\n".join([para.text for para in doc.paragraphs])
 
-def extract_section_by_keywords(text, keywords):
-    # Search for relevant keywords in the text and extract the section following the keywords
-    pattern = '|'.join([re.escape(keyword) for keyword in keywords])  # Escape the keywords to avoid regex issues
-    matches = re.findall(rf'(?i)({pattern})(.*?)(?=\n\s*\n|\Z)', text, re.DOTALL)  # Capture until next empty line or end of text
-    if matches:
-        return "\n\n".join([f"Section: {match[0]}\n{match[1].strip()}" for match in matches])
-    return "Scope of work or services section not found."
-
-def extract_keywords(text):
-    # Simple keyword extraction using regex
-    keywords = re.findall(r'\b\w{4,}\b', text.lower())  # Extract words with 4+ letters
-    return list(set(keywords))  # Remove duplicates
-
-def find_matching_providers(keywords):
-    # Fetch CSV data
+def find_matching_providers(summary):
+    """Find providers in the CSV that match the summarized scope of work."""
     csv_data = get_csv_data()
-    
     if csv_data is None:
         return pd.DataFrame()  # Return an empty DataFrame if fetching the CSV failed
+
+    # Use the summary to find matching providers based on 'Primary Industry'
+    matching_providers = csv_data[csv_data['Primary Industry'].fillna('').apply(lambda industry: summary.lower() in industry.lower())]
     
-    # Safely handle missing values and match keywords
-    matching_providers = csv_data[csv_data['Primary Industry'].fillna('').apply(lambda industry: any(keyword in industry.lower() for keyword in keywords))]
-    
-    # Display all columns of matched providers
-    return matching_providers  # This returns all columns from the CSV
+    # Display all columns for the matching providers
+    return matching_providers
 
 def get_text_chunks(csv_data):
     # Combine all text in the 'Primary Industry' column into a single string
