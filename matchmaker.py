@@ -136,8 +136,10 @@ def find_matching_providers(keywords):
     return matching_providers[['Company Name', 'Primary Industry', 'Contact Email']]  # Adjust columns as needed
 
 def get_text_chunks(csv_data):
+    # Combine all text in the 'Primary Industry' column into a single string
+    text = " ".join(csv_data['Primary Industry'].fillna('').tolist())  # Adjust column selection if needed
     text_splitter = CharacterTextSplitter(separator="\n", chunk_size=1000, chunk_overlap=200, length_function=len)
-    chunks = text_splitter.split_text(csv_data)
+    chunks = text_splitter.split_text(text)
     return chunks
 
 def get_vectorstore(text_chunks):
