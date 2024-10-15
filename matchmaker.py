@@ -92,19 +92,33 @@ def summarize_rfp(uploaded_file):
     else:
         return None
 
-    # Summarize the extracted text using OpenAI with the new API format
+    # Check if the extracted text is available
+    if not text:
+        st.error("No text found in the uploaded file.")
+        return None
+    
+    # Use the new OpenAI API with ChatCompletion
     openai.api_key = st.secrets["openai_api_key"]
-    response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": "You are an assistant that summarizes RFP documents."},
-            {"role": "user", "content": f"Please summarize the following text with a focus on the type of work or services being requested:\n\n{text}"}
-        ],
-        max_tokens=150,
-        temperature=0.5
-    )
-    summary = response['choices'][0]['message']['content'].strip()
-    return summary
+    
+    # Try-except block to handle any issues with the OpenAI API call
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are an assistant that summarizes RFP documents."},
+                {"role": "user", "content": f"Please summarize the following text with a focus on the type of work or services being requested:\n\n{text}"}
+            ],
+            max_tokens=150,
+            temperature=0.5
+        )
+        
+        # Extract and return the summary from the OpenAI response
+        summary = response['choices'][0]['message']['content'].strip()
+        return summary
+    
+    except Exception as e:
+        st.error(f"An error occurred with the OpenAI API: {e}")
+        return None
 
 def extract_pdf_text(pdf_file):
     reader = PdfReader(pdf_file)
