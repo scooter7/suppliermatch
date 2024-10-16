@@ -1,34 +1,26 @@
 import os
-import re
+import re  # Import re for regular expression matching
 import streamlit as st
 import requests
 import pandas as pd
 import openai
 from io import BytesIO
+from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain_community.chat_models import ChatOpenAI
+from langchain.memory import ConversationBufferMemory
+from langchain.chains import ConversationalRetrievalChain
+from langchain.text_splitter import CharacterTextSplitter
+from htmlTemplates import css
 from datetime import datetime
 import base64
 from PyPDF2 import PdfReader
 from docx import Document
 
-# Initialize the OpenAI client
 client = openai
-client.api_key = st.secrets["openai_api_key"]
-
-# Define the css variable directly
-css = '''
-<style>
-/* Add your custom CSS styling here */
-body {
-    background-color: #f5f5f5;
-}
-/* Hide the footer */
-footer {visibility: hidden;}
-/* Hide the header */
-header {visibility: hidden;}
-</style>
-'''
 
 CSV_URL = "https://raw.githubusercontent.com/scooter7/suppliermatch/main/docs/csv_data.csv"
+GITHUB_HISTORY_URL = "https://api.github.com/repos/scooter7/suppliermatch/contents/History"
 
 def main():
     # Set page config
@@ -45,7 +37,6 @@ def main():
     """
     st.markdown(hide_toolbar_css, unsafe_allow_html=True)
 
-    # Use the css variable
     st.write(css, unsafe_allow_html=True)
     header_html = """
     <div style="text-align: center;">
@@ -62,24 +53,11 @@ def main():
     if uploaded_file:
         summary = summarize_rfp(uploaded_file)
         if summary:
-            st.write("**Summarized Scope of Work:**")
+            st.write("Summarized Scope of Work:")
             st.write(summary)
             matching_providers = find_matching_providers(summary)
-            if not matching_providers.empty:
-                st.write("**Matching Providers (Filtered Company Details):**")
-                st.write(matching_providers)
-            else:
-                st.write("No matching companies found.")
-
-def get_csv_data():
-    response = requests.get(CSV_URL)
-    if response.status_code != 200:
-        st.error(f"Failed to fetch CSV data: {response.status_code}, {response.text}")
-        return None
-    csv_data = pd.read_csv(BytesIO(response.content), encoding='utf-8')
-    # Clean up column headers
-    csv_data.columns = csv_data.columns.str.replace(r'\s+', ' ', regex=True).str.strip()
-    return csv_data
+            st.write("Matching Providers (Filtered Company Details):")
+            st.write(matching_providers)
 
 def summarize_rfp(uploaded_file):
     """Summarize the RFP document using OpenAI."""
@@ -96,9 +74,11 @@ def summarize_rfp(uploaded_file):
         st.error("No text found in the uploaded file.")
         return None
     
+    openai.api_key = st.secrets["openai_api_key"]
+
     try:
         response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are an assistant that summarizes RFP documents."},
                 {"role": "user", "content": f"Please summarize the following text with a focus on the type of work or services being requested:\n\n{text}"}
@@ -118,9 +98,7 @@ def extract_pdf_text(pdf_file):
     reader = PdfReader(pdf_file)
     text = ""
     for page in reader.pages:
-        page_text = page.extract_text()
-        if page_text:
-            text += page_text
+        text += page.extract_text()
     return text
 
 def extract_docx_text(docx_file):
@@ -133,76 +111,39 @@ def find_matching_providers(summary):
     if csv_data is None:
         return pd.DataFrame()  # Return an empty DataFrame if fetching the CSV failed
 
-    # Use the exact column name
-    primary_industry_column = 'Primary Industry .1'
+    openai.api_key = st.secrets["openai_api_key"]
 
-    if primary_industry_column not in csv_data.columns:
-        st.error(f"Column '{primary_industry_column}' not found in the data.")
-        return pd.DataFrame()
-
-    # Prepare companies data
     companies_data = []
     for index, row in csv_data.iterrows():
         company_name = row['Company']
-        primary_industry = row[primary_industry_column]
+        primary_industry = row['Primary Industry']
         companies_data.append(f"{company_name}: {primary_industry}")
 
-    # Limit the number of companies to avoid exceeding context length
-    max_companies = 30  # Adjust this number based on testing
-    companies_data = companies_data[:max_companies]
-
     companies_text = "\n".join(companies_data)
-
-    # Estimate token usage
-    total_text = f"Scope of Work:\n{summary}\n\nCompanies:\n{companies_text}"
-    estimated_tokens = estimate_tokens(total_text)
-    max_allowed_tokens = 7500  # Reserve some tokens for the model's response
-
-    # Adjust the number of companies if estimated tokens exceed the limit
-    while estimated_tokens > max_allowed_tokens and max_companies > 5:
-        max_companies -= 5
-        companies_data = companies_data[:max_companies]
-        companies_text = "\n".join(companies_data)
-        total_text = f"Scope of Work:\n{summary}\n\nCompanies:\n{companies_text}"
-        estimated_tokens = estimate_tokens(total_text)
-
-    if estimated_tokens > max_allowed_tokens:
-        st.error("The combined length of the scope of work and companies list exceeds the maximum allowed tokens.")
-        return pd.DataFrame()
 
     try:
         # Ask OpenAI to evaluate all companies at once
         response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4o-mini",
             messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are an assistant that helps find companies suitable for specific scopes of services based on their industries. "
-                        "Provide a list of matching companies from the provided list, based on the scope of work. "
-                        "List the company names only, separated by commas."
-                    )
-                },
-                {
-                    "role": "user",
-                    "content": f"Scope of Work:\n{summary}\n\nCompanies:\n{companies_text}"
-                }
+                {"role": "system", "content": "You are an assistant that helps find companies for specific scopes of services based on their industries."},
+                {"role": "user", "content": f"Given the following list of companies and their industries, determine which companies would be a good fit for the following scope of work:\n\n{summary}\n\nCompanies:\n{companies_text}"}
             ],
-            max_tokens=500,
+            max_tokens=1000,
             temperature=0.5
         )
 
+        # Extract the response content
         response_text = response.choices[0].message.content.strip()
 
-        # Extract the matching company names from the response
-        available_company_names = [cd.split(':')[0].strip() for cd in companies_data]
-        matching_companies = [name.strip() for name in response_text.split(',') if name.strip() in available_company_names]
+        # Use regex to extract company numbers or names (assuming the company numbers/names are in the form "Company X")
+        matching_companies = re.findall(r'Company\s*(\d+)', response_text)
 
         if matching_companies:
-            st.write(f"**Matching Companies:** {', '.join(matching_companies)}")
+            st.write(f"Matching Companies: {matching_companies}")
 
-            # Filter the CSV DataFrame by matching company names
-            matching_providers_df = csv_data[csv_data['Company'].isin(matching_companies)]
+            # Filter the CSV DataFrame by matching company numbers
+            matching_providers_df = csv_data[csv_data.index.isin([int(company_num) - 1 for company_num in matching_companies])]
 
             if matching_providers_df.empty:
                 st.write("No matching companies found.")
@@ -215,16 +156,14 @@ def find_matching_providers(summary):
         st.error(f"An error occurred with the OpenAI API: {e}")
         return pd.DataFrame()
 
-def estimate_tokens(text):
-    """Estimate the number of tokens in a text using tiktoken."""
-    try:
-        import tiktoken
-        encoding = tiktoken.encoding_for_model("gpt-4")
-        num_tokens = len(encoding.encode(text))
-        return num_tokens
-    except ImportError:
-        # Fallback estimation: assume 1 token per 4 characters
-        return len(text) / 4
+def get_csv_data():
+    response = requests.get(CSV_URL)
+    if response.status_code != 200:
+        st.error(f"Failed to fetch CSV data: {response.status_code}, {response.text}")
+        return None
+    csv_data = pd.read_csv(BytesIO(response.content), encoding='utf-8')
+    csv_data.columns = csv_data.columns.str.strip()  # Strip spaces from column headers
+    return csv_data
 
 if __name__ == '__main__':
     main()
