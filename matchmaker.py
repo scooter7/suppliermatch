@@ -14,8 +14,6 @@ from langchain.text_splitter import CharacterTextSplitter
 from htmlTemplates import css, bot_template, user_template
 from datetime import datetime
 import base64
-from PyPDF2 import PdfReader
-from docx import Document
 
 client = openai
 
@@ -46,7 +44,10 @@ def main():
     </div>
     """
     st.markdown(header_html, unsafe_allow_html=True)
-    
+
+    # Load CSV data at the start to make it queryable later
+    csv_data = get_csv_data()
+
     # File uploader for RFP
     uploaded_file = st.file_uploader("Upload your RFP (PDF or Word)", type=["pdf", "docx"])
     
@@ -59,41 +60,35 @@ def main():
             st.write("Matching Providers (Filtered Company Details):")
             st.write(matching_providers)
 
-    # Add supplier query functionality after the RFP process
+    # Add supplier query functionality
     if 'conversation' not in st.session_state:
         st.session_state.conversation = None
     if 'chat_history' not in st.session_state:
         st.session_state.chat_history = []
-    csv_data = get_csv_data()
+
     if csv_data is not None:
         text_chunks = get_text_chunks(csv_data)
         if text_chunks:
             vectorstore = get_vectorstore(text_chunks)
             st.session_state.conversation = get_conversation_chain(vectorstore)
+    
     user_question = st.text_input("Ask about our suppliers:")
     if user_question:
-        handle_userinput(user_question)
+        handle_userinput(user_question, csv_data)
 
 def get_csv_data():
+    """Fetch CSV data from the GitHub repository."""
     response = requests.get(CSV_URL)
     if response.status_code != 200:
         st.error(f"Failed to fetch CSV data: {response.status_code}, {response.text}")
         return None
     csv_data = pd.read_csv(BytesIO(response.content), encoding='utf-8')
-    csv_data.columns = csv_data.columns.str.strip()  # Strip spaces from column headers
+    csv_data.columns = csv_data.columns.str.strip()  # Clean up column headers
     return csv_data
 
 def summarize_rfp(uploaded_file):
     """Summarize the RFP document using OpenAI."""
-    # Extract the text from PDF or Word file
-    if uploaded_file.type == "application/pdf":
-        text = extract_pdf_text(uploaded_file)
-    elif uploaded_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-        text = extract_docx_text(uploaded_file)
-    else:
-        return None
-
-    # Check if the extracted text is available
+    text = extract_file_text(uploaded_file)
     if not text:
         st.error("No text found in the uploaded file.")
         return None
@@ -118,7 +113,17 @@ def summarize_rfp(uploaded_file):
         st.error(f"An error occurred with the OpenAI API: {e}")
         return None
 
+def extract_file_text(file):
+    """Extract text from PDF or DOCX file."""
+    if file.type == "application/pdf":
+        return extract_pdf_text(file)
+    elif file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+        return extract_docx_text(file)
+    return None
+
 def extract_pdf_text(pdf_file):
+    """Extract text from a PDF file."""
+    from PyPDF2 import PdfReader
     reader = PdfReader(pdf_file)
     text = ""
     for page in reader.pages:
@@ -126,6 +131,8 @@ def extract_pdf_text(pdf_file):
     return text
 
 def extract_docx_text(docx_file):
+    """Extract text from a DOCX file."""
+    from docx import Document
     doc = Document(docx_file)
     return "\n".join([para.text for para in doc.paragraphs])
 
@@ -180,28 +187,8 @@ def find_matching_providers(summary):
         st.error(f"An error occurred with the OpenAI API: {e}")
         return pd.DataFrame()
 
-def get_text_chunks(csv_data):
-    # Combine all text in the 'Primary Industry' column into a single string
-    text = " ".join(csv_data['Primary Industry'].fillna('').tolist())  # Adjust column selection if needed
-    text_splitter = CharacterTextSplitter(separator="\n", chunk_size=1000, chunk_overlap=200, length_function=len)
-    chunks = text_splitter.split_text(text)
-    return chunks
-
-def get_vectorstore(text_chunks):
-    if not text_chunks:
-        raise ValueError("No text chunks available for embedding.")
-    os.environ["OPENAI_API_KEY"] = st.secrets["openai_api_key"]
-    embeddings = OpenAIEmbeddings()
-    vectorstore = FAISS.from_texts(texts=text_chunks, embedding=embeddings)
-    return vectorstore
-
-def get_conversation_chain(vectorstore):
-    llm = ChatOpenAI()
-    memory = ConversationBufferMemory(memory_key='chat_history', return_messages=True)
-    conversation_chain = ConversationalRetrievalChain.from_llm(llm=llm, retriever=vectorstore.as_retriever(), memory=memory)
-    return conversation_chain
-
-def handle_userinput(user_question):
+def handle_userinput(user_question, csv_data):
+    """Handle user input and query CSV data for supplier questions."""
     if 'conversation' in st.session_state and st.session_state.conversation:
         response = st.session_state.conversation({'question': user_question})
         st.session_state.chat_history = response['chat_history']
@@ -214,15 +201,22 @@ def handle_userinput(user_question):
         # Save chat history after each interaction
         save_chat_history(st.session_state.chat_history)
     else:
-        st.error("The conversation model is not initialized. Please wait until the model is ready.")
+        # Directly querying the CSV file based on user input
+        matched_rows = csv_data[csv_data.apply(lambda row: user_question.lower() in str(row).lower(), axis=1)]
+        if not matched_rows.empty:
+            st.write("Matching Supplier Information:")
+            st.write(matched_rows)
+        else:
+            st.write("No suppliers match your query.")
 
 def modify_response_language(original_response):
+    """Modify response language for a more personalized tone."""
     response = original_response.replace(" they ", " we ")
-    response = original_response.replace("They ", "We ")
-    response = original_response.replace(" their ", " our ")
-    response = original_response.replace("Their ", "Our ")
-    response = original_response.replace(" them ", " us ")
-    response = original_response.replace("Them ", "Us ")
+    response = response.replace("They ", "We ")
+    response = response.replace(" their ", " our ")
+    response = response.replace("Their ", "Our ")
+    response = response.replace(" them ", " us ")
+    response = response.replace("Them ", "Us ")
     return response
 
 def save_chat_history(chat_history):
