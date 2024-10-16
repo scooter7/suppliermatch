@@ -96,6 +96,7 @@ def summarize_rfp(uploaded_file):
     openai.api_key = st.secrets["openai_api_key"]
 
     try:
+        # Maintain the same syntax as requested
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -106,7 +107,8 @@ def summarize_rfp(uploaded_file):
             temperature=0.5
         )
         
-        summary = response.choices[0].message["content"].strip()
+        # Correct way to extract the message content
+        summary = response.choices[0]["message"]["content"].strip()
         return summary
 
     except Exception as e:
@@ -161,7 +163,7 @@ def find_matching_providers(summary, csv_data):
         )
 
         # Extract the response content
-        response_text = response.choices[0].message["content"].strip()
+        response_text = response.choices[0]["message"]["content"].strip()
 
         # Use regex to extract company numbers or names (assuming the company numbers/names are in the form "Company X")
         matching_companies = re.findall(r'Company\s*(\d+)', response_text)
