@@ -1,0 +1,3 @@
+User: tell me more about Company 26
+
+Bot: I don't have any specific information about Company 26 based on the context provided.
