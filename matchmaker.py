@@ -96,7 +96,7 @@ def summarize_rfp(uploaded_file):
         return None
 
     try:
-        response = openai.ChatCompletion.create(
+        response = openai.chat.completions.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are an assistant that summarizes RFP documents."},
