@@ -56,7 +56,7 @@ def main():
         if summary:
             st.write("Summarized Scope of Work:")
             st.write(summary)
-            matching_providers = find_matching_providers(summary)
+            matching_providers = find_matching_providers(summary, csv_data)
             st.write("Matching Providers (Filtered Company Details):")
             st.write(matching_providers)
 
@@ -136,12 +136,8 @@ def extract_docx_text(docx_file):
     doc = Document(docx_file)
     return "\n".join([para.text for para in doc.paragraphs])
 
-def find_matching_providers(summary):
+def find_matching_providers(summary, csv_data):
     """Find providers in the CSV that match the summarized scope of work based on relevant industries."""
-    csv_data = get_csv_data()
-    if csv_data is None:
-        return pd.DataFrame()  # Return an empty DataFrame if fetching the CSV failed
-
     openai.api_key = st.secrets["openai_api_key"]
 
     companies_data = []
@@ -187,6 +183,27 @@ def find_matching_providers(summary):
         st.error(f"An error occurred with the OpenAI API: {e}")
         return pd.DataFrame()
 
+def get_text_chunks(csv_data):
+    """Split the CSV data into text chunks for processing."""
+    text = " ".join(csv_data['Primary Industry'].fillna('').tolist())  # Adjust column selection if needed
+    text_splitter = CharacterTextSplitter(separator="\n", chunk_size=1000, chunk_overlap=200, length_function=len)
+    chunks = text_splitter.split_text(text)
+    return chunks
+
+def get_vectorstore(text_chunks):
+    if not text_chunks:
+        raise ValueError("No text chunks available for embedding.")
+    os.environ["OPENAI_API_KEY"] = st.secrets["openai_api_key"]
+    embeddings = OpenAIEmbeddings()
+    vectorstore = FAISS.from_texts(texts=text_chunks, embedding=embeddings)
+    return vectorstore
+
+def get_conversation_chain(vectorstore):
+    llm = ChatOpenAI()
+    memory = ConversationBufferMemory(memory_key='chat_history', return_messages=True)
+    conversation_chain = ConversationalRetrievalChain.from_llm(llm=llm, retriever=vectorstore.as_retriever(), memory=memory)
+    return conversation_chain
+
 def handle_userinput(user_question, csv_data):
     """Handle user input and query CSV data for supplier questions."""
     if 'conversation' in st.session_state and st.session_state.conversation:
@@ -202,21 +219,15 @@ def handle_userinput(user_question, csv_data):
         save_chat_history(st.session_state.chat_history)
     else:
         # Directly querying the CSV file based on user input
-        matched_rows = csv_data[csv_data.apply(lambda row: user_question.lower() in str(row).lower(), axis=1)]
-        if not matched_rows.empty:
-            st.write("Matching Supplier Information:")
-            st.write(matched_rows)
-        else:
-            st.write("No suppliers match your query.")
+        st.error("The conversation model is not initialized. Please wait until the model is ready.")
 
 def modify_response_language(original_response):
-    """Modify response language for a more personalized tone."""
     response = original_response.replace(" they ", " we ")
-    response = response.replace("They ", "We ")
-    response = response.replace(" their ", " our ")
-    response = response.replace("Their ", "Our ")
-    response = response.replace(" them ", " us ")
-    response = response.replace("Them ", "Us ")
+    response = original_response.replace("They ", "We ")
+    response = original_response.replace(" their ", " our ")
+    response = original_response.replace("Their ", "Our ")
+    response = original_response.replace(" them ", " us ")
+    response = original_response.replace("Them ", "Us ")
     return response
 
 def save_chat_history(chat_history):
