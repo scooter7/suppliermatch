@@ -128,12 +128,25 @@ def find_matching_providers(summary):
     if csv_data is None:
         return pd.DataFrame()  # Return an empty DataFrame if fetching the CSV failed
 
+    # Print out the column names for debugging
+    st.write("CSV Columns:", csv_data.columns.tolist())
+
+    # Find all columns that contain 'Primary Industry'
+    primary_industry_columns = [col for col in csv_data.columns if 'Primary Industry' in col]
+
+    if not primary_industry_columns:
+        st.error("No 'Primary Industry' column found in the data.")
+        return pd.DataFrame()
+
+    # Use the last 'Primary Industry' column
+    primary_industry_column = primary_industry_columns[-1]
+
     openai.api_key = st.secrets["openai_api_key"]
 
     companies_data = []
     for index, row in csv_data.iterrows():
         company_name = row['Company']
-        primary_industry = row['Primary Industry.1']  # Use the second 'Primary Industry' column
+        primary_industry = row[primary_industry_column]  # Use the dynamically selected column
         companies_data.append(f"{company_name}: {primary_industry}")
 
     companies_text = "\n".join(companies_data)
