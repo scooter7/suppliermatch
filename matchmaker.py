@@ -112,7 +112,7 @@ def summarize_rfp(uploaded_file):
         )
         
         # Correct response handling
-        summary = response['choices'][0]['message']['content'].strip()
+        summary = response.choices[0].message.content.strip()
         return summary
 
     except Exception as e:
@@ -158,7 +158,7 @@ def find_matching_providers(summary):
         )
 
         # Handle the response correctly
-        response_text = response['choices'][0]['message']['content'].strip()
+        response_text = response.choices[0].message.content.strip()
 
         # Use regex to extract company numbers or names (assuming the company numbers/names are in the form "Company X")
         matching_companies = re.findall(r'Company\s*(\d+)', response_text)
