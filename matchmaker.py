@@ -6,7 +6,6 @@ import pandas as pd
 import openai
 from io import BytesIO
 from datetime import datetime
-import base64
 from PyPDF2 import PdfReader
 from docx import Document
 
@@ -96,17 +95,17 @@ def summarize_rfp(uploaded_file):
         return None
 
     try:
-        response = openai.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are an assistant that summarizes RFP documents."},
-                {"role": "user", "content": f"Please provide a concise summary focusing on the type of work or services being requested:\n\n{text}"}
+                {"role": "user", "content": f"Please summarize the following text with a focus on the type of work or services being requested:\n\n{text}"}
             ],
             max_tokens=150,
             temperature=0.5
         )
         
-        summary = response['choices'][0]['message']['content'].strip()
+        summary = response.choices[0].message.content.strip()
         return summary
 
     except Exception as e:
@@ -117,8 +116,9 @@ def extract_pdf_text(pdf_file):
     reader = PdfReader(pdf_file)
     text = ""
     for page in reader.pages:
-        if page.extract_text():
-            text += page.extract_text()
+        page_text = page.extract_text()
+        if page_text:
+            text += page_text
     return text
 
 def extract_docx_text(docx_file):
@@ -191,7 +191,7 @@ def find_matching_providers(summary):
         )
 
         # Extract the response content
-        response_text = response['choices'][0]['message']['content'].strip()
+        response_text = response.choices[0].message.content.strip()
 
         # Extract the matching company names from the response
         available_company_names = [cd.split(':')[0] for cd in companies_data]
@@ -210,7 +210,7 @@ def find_matching_providers(summary):
             st.write("No matching companies extracted from the response.")
             return pd.DataFrame()
 
-    except openai.error.OpenAIError as e:
+    except Exception as e:
         st.error(f"An error occurred with the OpenAI API: {e}")
         return pd.DataFrame()
 
