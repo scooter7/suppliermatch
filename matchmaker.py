@@ -14,8 +14,6 @@ from langchain.text_splitter import CharacterTextSplitter
 from htmlTemplates import css, bot_template, user_template
 from datetime import datetime
 import base64
-from PyPDF2 import PdfReader
-from docx import Document
 
 client = openai
 
@@ -46,8 +44,8 @@ def main():
     </div>
     """
     st.markdown(header_html, unsafe_allow_html=True)
-    
-    # Load CSV data
+
+    # Load CSV data at the start to make it queryable later
     csv_data = get_csv_data()
 
     # File uploader for RFP
@@ -62,19 +60,18 @@ def main():
             st.write("Matching Providers (Filtered Company Details):")
             st.write(matching_providers)
 
-    # Initialize conversation and chat history
+    # Add supplier query functionality
     if 'conversation' not in st.session_state:
         st.session_state.conversation = None
     if 'chat_history' not in st.session_state:
         st.session_state.chat_history = []
-    
+
     if csv_data is not None:
         text_chunks = get_text_chunks_from_csv(csv_data)
         if text_chunks:
             vectorstore = get_vectorstore(text_chunks)
             st.session_state.conversation = get_conversation_chain(vectorstore)
-
-    # User input for querying suppliers
+    
     user_question = st.text_input("Ask about our suppliers:")
     if user_question:
         handle_userinput(user_question)
@@ -109,7 +106,7 @@ def summarize_rfp(uploaded_file):
             temperature=0.5
         )
         
-        summary = response.choices[0].message.content.strip()
+        summary = response['choices'][0]['message']['content'].strip()
         return summary
 
     except Exception as e:
@@ -126,6 +123,7 @@ def extract_file_text(file):
 
 def extract_pdf_text(pdf_file):
     """Extract text from a PDF file."""
+    from PyPDF2 import PdfReader
     reader = PdfReader(pdf_file)
     text = ""
     for page in reader.pages:
@@ -134,11 +132,12 @@ def extract_pdf_text(pdf_file):
 
 def extract_docx_text(docx_file):
     """Extract text from a DOCX file."""
+    from docx import Document
     doc = Document(docx_file)
     return "\n".join([para.text for para in doc.paragraphs])
 
 def find_matching_providers(summary, csv_data):
-    """Find providers in the CSV that match the summarized scope of work."""
+    """Find providers in the CSV that match the summarized scope of work based on relevant industries."""
     openai.api_key = st.secrets["openai_api_key"]
 
     companies_data = []
@@ -150,7 +149,7 @@ def find_matching_providers(summary, csv_data):
     companies_text = "\n".join(companies_data)
 
     try:
-        # Use OpenAI to evaluate all companies at once
+        # Ask OpenAI to evaluate all companies at once
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -161,12 +160,18 @@ def find_matching_providers(summary, csv_data):
             temperature=0.5
         )
 
-        response_text = response.choices[0].message.content.strip()
+        # Extract the response content
+        response_text = response['choices'][0]['message']['content'].strip()
+
+        # Use regex to extract company numbers or names (assuming the company numbers/names are in the form "Company X")
         matching_companies = re.findall(r'Company\s*(\d+)', response_text)
 
         if matching_companies:
             st.write(f"Matching Companies: {matching_companies}")
+
+            # Filter the CSV DataFrame by matching company numbers
             matching_providers_df = csv_data[csv_data.index.isin([int(company_num) - 1 for company_num in matching_companies])]
+
             if matching_providers_df.empty:
                 st.write("No matching companies found.")
             return matching_providers_df
@@ -207,12 +212,12 @@ def get_conversation_chain(vectorstore):
     return conversation_chain
 
 def handle_userinput(user_question):
-    """Handle user input for querying CSV data conversationally."""
+    """Handle user input and query CSV data for supplier questions."""
     if 'conversation' in st.session_state and st.session_state.conversation:
         response = st.session_state.conversation({'question': user_question})
         st.session_state.chat_history = response['chat_history']
         for i, message in enumerate(st.session_state.chat_history):
-            modified_content = modify_response_language(message.content)
+            modified_content = modify_response_language(message['content'])
             if i % 2 == 0:
                 st.write(user_template.replace("{{MSG}}", modified_content), unsafe_allow_html=True)
             else:
@@ -240,7 +245,7 @@ def save_chat_history(chat_history):
     }
     date_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     file_name = f"chat_history_{date_str}.txt"
-    chat_content = "\n\n".join(f"{'User:' if i % 2 == 0 else 'Bot:'} {message.content}" for i, message in enumerate(chat_history))
+    chat_content = "\n\n".join(f"{'User:' if i % 2 == 0 else 'Bot:'} {message['content']}" for i, message in enumerate(chat_history))
     
     encoded_content = base64.b64encode(chat_content.encode('utf-8')).decode('utf-8')
     data = {
