@@ -12,6 +12,20 @@ from docx import Document
 
 client = openai
 
+# Define the css variable directly
+css = '''
+<style>
+/* Add your custom CSS styling here */
+body {
+    background-color: #f5f5f5;
+}
+/* Hide the footer */
+footer {visibility: hidden;}
+/* Hide the header */
+header {visibility: hidden;}
+</style>
+'''
+
 CSV_URL = "https://raw.githubusercontent.com/scooter7/suppliermatch/main/docs/csv_data.csv"
 GITHUB_HISTORY_URL = "https://api.github.com/repos/scooter7/suppliermatch/contents/History"
 
@@ -30,6 +44,7 @@ def main():
     """
     st.markdown(hide_toolbar_css, unsafe_allow_html=True)
 
+    # Use the css variable
     st.write(css, unsafe_allow_html=True)
     header_html = """
     <div style="text-align: center;">
