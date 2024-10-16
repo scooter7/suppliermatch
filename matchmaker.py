@@ -95,7 +95,7 @@ def summarize_rfp(uploaded_file):
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are an assistant that summarizes RFP documents."},
                 {"role": "user", "content": f"Please summarize the following text with a focus on the type of work or services being requested:\n\n{text}"}
@@ -104,7 +104,7 @@ def summarize_rfp(uploaded_file):
             temperature=0.5
         )
         
-        summary = response['choices'][0]['message']['content'].strip()
+        summary = response.choices[0].message.content.strip()
         return summary
 
     except Exception as e:
@@ -140,8 +140,8 @@ def find_matching_providers(summary):
 
     try:
         # Ask OpenAI to evaluate all companies at once
-        response = client.ChatCompletion.create(
-            model="gpt-4o-mini",
+        response = client.chat.completions.create(
+            model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are an assistant that helps find companies for specific scopes of services based on their industries."},
                 {"role": "user", "content": f"Given the following list of companies and their industries, determine which companies would be a good fit for the following scope of work:\n\n{summary}\n\nCompanies:\n{companies_text}"}
@@ -151,9 +151,9 @@ def find_matching_providers(summary):
         )
 
         # Extract the response content
-        response_text = response['choices'][0]['message']['content'].strip()
+        response_text = response.choices[0].message.content.strip()
 
-        # Use regex to extract company names
+        # Use regex to extract company numbers or names (assuming the company numbers/names are in the form "Company X")
         matching_companies = re.findall(r'Company\s*(\d+)', response_text)
 
         if matching_companies:
