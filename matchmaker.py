@@ -1,5 +1,5 @@
 import os
-import re  # Import re for regular expression matching
+import re
 import streamlit as st
 import requests
 import pandas as pd
@@ -47,6 +47,9 @@ def main():
     """
     st.markdown(header_html, unsafe_allow_html=True)
     
+    # Load CSV data from GitHub
+    csv_data = get_csv_data()
+
     # File uploader for RFP
     uploaded_file = st.file_uploader("Upload your RFP (PDF or Word)", type=["pdf", "docx"])
     
@@ -55,7 +58,7 @@ def main():
         if summary:
             st.write("Summarized Scope of Work:")
             st.write(summary)
-            matching_providers = find_matching_providers(summary)
+            matching_providers = find_matching_providers(summary, csv_data)
             st.write("Matching Providers (Filtered Company Details):")
             st.write(matching_providers)
 
@@ -64,7 +67,6 @@ def main():
         st.session_state.conversation = None
     if 'chat_history' not in st.session_state:
         st.session_state.chat_history = []
-    csv_data = get_csv_data()
     if csv_data is not None:
         text_chunks = get_text_chunks(csv_data)
         if text_chunks:
@@ -75,25 +77,18 @@ def main():
         handle_userinput(user_question)
 
 def get_csv_data():
+    """Fetch CSV data from the GitHub repository."""
     response = requests.get(CSV_URL)
     if response.status_code != 200:
         st.error(f"Failed to fetch CSV data: {response.status_code}, {response.text}")
         return None
     csv_data = pd.read_csv(BytesIO(response.content), encoding='utf-8')
-    csv_data.columns = csv_data.columns.str.strip()  # Strip spaces from column headers
+    csv_data.columns = csv_data.columns.str.strip()  # Clean up column headers
     return csv_data
 
 def summarize_rfp(uploaded_file):
     """Summarize the RFP document using OpenAI."""
-    # Extract the text from PDF or Word file
-    if uploaded_file.type == "application/pdf":
-        text = extract_pdf_text(uploaded_file)
-    elif uploaded_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-        text = extract_docx_text(uploaded_file)
-    else:
-        return None
-
-    # Check if the extracted text is available
+    text = extract_file_text(uploaded_file)
     if not text:
         st.error("No text found in the uploaded file.")
         return None
@@ -111,15 +106,23 @@ def summarize_rfp(uploaded_file):
             temperature=0.5
         )
         
-        # Correct response handling
-        summary = response.choices[0].message.content.strip()
+        summary = response.choices[0].message["content"].strip()
         return summary
 
     except Exception as e:
         st.error(f"An error occurred with the OpenAI API: {e}")
         return None
 
+def extract_file_text(file):
+    """Extract text from PDF or DOCX file."""
+    if file.type == "application/pdf":
+        return extract_pdf_text(file)
+    elif file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+        return extract_docx_text(file)
+    return None
+
 def extract_pdf_text(pdf_file):
+    """Extract text from a PDF file."""
     reader = PdfReader(pdf_file)
     text = ""
     for page in reader.pages:
@@ -127,17 +130,12 @@ def extract_pdf_text(pdf_file):
     return text
 
 def extract_docx_text(docx_file):
+    """Extract text from a DOCX file."""
     doc = Document(docx_file)
     return "\n".join([para.text for para in doc.paragraphs])
 
-def find_matching_providers(summary):
-    """Find providers in the CSV that match the summarized scope of work based on relevant industries."""
-    csv_data = get_csv_data()
-    if csv_data is None:
-        return pd.DataFrame()  # Return an empty DataFrame if fetching the CSV failed
-
-    openai.api_key = st.secrets["openai_api_key"]
-
+def find_matching_providers(summary, csv_data):
+    """Find providers in the CSV that match the summarized scope of work."""
     companies_data = []
     for index, row in csv_data.iterrows():
         company_name = row['Company']
@@ -147,6 +145,7 @@ def find_matching_providers(summary):
     companies_text = "\n".join(companies_data)
 
     try:
+        # Use OpenAI to match companies based on the RFP scope
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -157,18 +156,13 @@ def find_matching_providers(summary):
             temperature=0.5
         )
 
-        # Handle the response correctly
-        response_text = response.choices[0].message.content.strip()
-
-        # Use regex to extract company numbers or names (assuming the company numbers/names are in the form "Company X")
+        response_text = response.choices[0].message["content"].strip()
         matching_companies = re.findall(r'Company\s*(\d+)', response_text)
 
         if matching_companies:
             st.write(f"Matching Companies: {matching_companies}")
 
-            # Filter the CSV DataFrame by matching company numbers
             matching_providers_df = csv_data[csv_data.index.isin([int(company_num) - 1 for company_num in matching_companies])]
-
             if matching_providers_df.empty:
                 st.write("No matching companies found.")
             return matching_providers_df
@@ -181,13 +175,14 @@ def find_matching_providers(summary):
         return pd.DataFrame()
 
 def get_text_chunks(csv_data):
-    # Combine all text in the 'Primary Industry' column into a single string
+    """Split the CSV data into text chunks for conversational retrieval."""
     text = " ".join(csv_data['Primary Industry'].fillna('').tolist())  # Adjust column selection if needed
     text_splitter = CharacterTextSplitter(separator="\n", chunk_size=1000, chunk_overlap=200, length_function=len)
     chunks = text_splitter.split_text(text)
     return chunks
 
 def get_vectorstore(text_chunks):
+    """Create a vector store from text chunks."""
     if not text_chunks:
         raise ValueError("No text chunks available for embedding.")
     os.environ["OPENAI_API_KEY"] = st.secrets["openai_api_key"]
@@ -196,12 +191,14 @@ def get_vectorstore(text_chunks):
     return vectorstore
 
 def get_conversation_chain(vectorstore):
+    """Set up the conversational retrieval chain using LangChain."""
     llm = ChatOpenAI()
     memory = ConversationBufferMemory(memory_key='chat_history', return_messages=True)
     conversation_chain = ConversationalRetrievalChain.from_llm(llm=llm, retriever=vectorstore.as_retriever(), memory=memory)
     return conversation_chain
 
 def handle_userinput(user_question):
+    """Handle user input for querying CSV data conversationally."""
     if 'conversation' in st.session_state and st.session_state.conversation:
         response = st.session_state.conversation({'question': user_question})
         st.session_state.chat_history = response['chat_history']
@@ -211,21 +208,22 @@ def handle_userinput(user_question):
                 st.write(user_template.replace("{{MSG}}", modified_content), unsafe_allow_html=True)
             else:
                 st.write(bot_template.replace("{{MSG}}", modified_content), unsafe_allow_html=True)
-        # Save chat history after each interaction
         save_chat_history(st.session_state.chat_history)
     else:
         st.error("The conversation model is not initialized. Please wait until the model is ready.")
 
 def modify_response_language(original_response):
+    """Modify the response language to be more conversational."""
     response = original_response.replace(" they ", " we ")
-    response = original_response.replace("They ", "We ")
-    response = original_response.replace(" their ", " our ")
-    response = original_response.replace("Their ", "Our ")
-    response = original_response.replace(" them ", " us ")
-    response = original_response.replace("Them ", "Us ")
+    response = response.replace("They ", "We ")
+    response = response.replace(" their ", " our ")
+    response = response.replace("Their ", "Our ")
+    response = response.replace(" them ", " us ")
+    response = response.replace("Them ", "Us ")
     return response
 
 def save_chat_history(chat_history):
+    """Save the chat history to GitHub."""
     github_token = st.secrets["github"]["access_token"]
     headers = {
         'Accept': 'application/vnd.github.v3+json',
