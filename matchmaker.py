@@ -47,6 +47,9 @@ def main():
     """
     st.markdown(header_html, unsafe_allow_html=True)
     
+    # Load CSV data
+    csv_data = get_csv_data()
+
     # File uploader for RFP
     uploaded_file = st.file_uploader("Upload your RFP (PDF or Word)", type=["pdf", "docx"])
     
@@ -55,45 +58,40 @@ def main():
         if summary:
             st.write("Summarized Scope of Work:")
             st.write(summary)
-            matching_providers = find_matching_providers(summary)
+            matching_providers = find_matching_providers(summary, csv_data)
             st.write("Matching Providers (Filtered Company Details):")
             st.write(matching_providers)
 
-    # Add supplier query functionality after the RFP process
+    # Initialize conversation and chat history
     if 'conversation' not in st.session_state:
         st.session_state.conversation = None
     if 'chat_history' not in st.session_state:
         st.session_state.chat_history = []
-    csv_data = get_csv_data()
+    
     if csv_data is not None:
         text_chunks = get_text_chunks(csv_data)
         if text_chunks:
             vectorstore = get_vectorstore(text_chunks)
             st.session_state.conversation = get_conversation_chain(vectorstore)
+
+    # User input for querying suppliers
     user_question = st.text_input("Ask about our suppliers:")
     if user_question:
         handle_userinput(user_question)
 
 def get_csv_data():
+    """Fetch CSV data from the GitHub repository."""
     response = requests.get(CSV_URL)
     if response.status_code != 200:
         st.error(f"Failed to fetch CSV data: {response.status_code}, {response.text}")
         return None
     csv_data = pd.read_csv(BytesIO(response.content), encoding='utf-8')
-    csv_data.columns = csv_data.columns.str.strip()  # Strip spaces from column headers
+    csv_data.columns = csv_data.columns.str.strip()  # Clean up column headers
     return csv_data
 
 def summarize_rfp(uploaded_file):
     """Summarize the RFP document using OpenAI."""
-    # Extract the text from PDF or Word file
-    if uploaded_file.type == "application/pdf":
-        text = extract_pdf_text(uploaded_file)
-    elif uploaded_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-        text = extract_docx_text(uploaded_file)
-    else:
-        return None
-
-    # Check if the extracted text is available
+    text = extract_file_text(uploaded_file)
     if not text:
         st.error("No text found in the uploaded file.")
         return None
@@ -111,15 +109,23 @@ def summarize_rfp(uploaded_file):
             temperature=0.5
         )
         
-        # Correct the way to handle response choices:
-        summary = response.choices[0].message.content.strip()  # Direct content access
+        summary = response.choices[0].message.content.strip()
         return summary
 
     except Exception as e:
         st.error(f"An error occurred with the OpenAI API: {e}")
         return None
 
+def extract_file_text(file):
+    """Extract text from PDF or DOCX file."""
+    if file.type == "application/pdf":
+        return extract_pdf_text(file)
+    elif file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+        return extract_docx_text(file)
+    return None
+
 def extract_pdf_text(pdf_file):
+    """Extract text from a PDF file."""
     reader = PdfReader(pdf_file)
     text = ""
     for page in reader.pages:
@@ -127,15 +133,12 @@ def extract_pdf_text(pdf_file):
     return text
 
 def extract_docx_text(docx_file):
+    """Extract text from a DOCX file."""
     doc = Document(docx_file)
     return "\n".join([para.text for para in doc.paragraphs])
 
-def find_matching_providers(summary):
+def find_matching_providers(summary, csv_data):
     """Find providers in the CSV that match the summarized scope of work."""
-    csv_data = get_csv_data()
-    if csv_data is None:
-        return pd.DataFrame()  # Return an empty DataFrame if fetching the CSV failed
-
     openai.api_key = st.secrets["openai_api_key"]
 
     companies_data = []
@@ -158,16 +161,11 @@ def find_matching_providers(summary):
             temperature=0.5
         )
 
-        # Correctly access the response content
-        response_text = response.choices[0].message.content.strip()  # Direct content access
-
-        # Use regex to extract company numbers or names (assuming the company numbers/names are in the form "Company X")
+        response_text = response.choices[0].message.content.strip()
         matching_companies = re.findall(r'Company\s*(\d+)', response_text)
 
         if matching_companies:
             st.write(f"Matching Companies: {matching_companies}")
-
-            # Filter the CSV DataFrame by matching company numbers
             matching_providers_df = csv_data[csv_data.index.isin([int(company_num) - 1 for company_num in matching_companies])]
             if matching_providers_df.empty:
                 st.write("No matching companies found.")
@@ -182,7 +180,7 @@ def find_matching_providers(summary):
 
 def get_text_chunks(csv_data):
     """Split the CSV data into text chunks for conversational retrieval."""
-    text = " ".join(csv_data['Primary Industry'].fillna('').tolist())  # Adjust column selection if needed
+    text = " ".join(csv_data['Primary Industry'].fillna('').tolist())
     text_splitter = CharacterTextSplitter(separator="\n", chunk_size=1000, chunk_overlap=200, length_function=len)
     chunks = text_splitter.split_text(text)
     return chunks
@@ -214,7 +212,6 @@ def handle_userinput(user_question):
                 st.write(user_template.replace("{{MSG}}", modified_content), unsafe_allow_html=True)
             else:
                 st.write(bot_template.replace("{{MSG}}", modified_content), unsafe_allow_html=True)
-        # Save chat history after each interaction
         save_chat_history(st.session_state.chat_history)
     else:
         st.error("The conversation model is not initialized. Please wait until the model is ready.")
