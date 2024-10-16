@@ -6,11 +6,13 @@ import pandas as pd
 import openai
 from io import BytesIO
 from datetime import datetime
+import base64
 from PyPDF2 import PdfReader
 from docx import Document
 
 # Initialize the OpenAI client
-openai.api_key = st.secrets["openai_api_key"]
+client = openai
+client.api_key = st.secrets["openai_api_key"]
 
 # Define the css variable directly
 css = '''
@@ -93,9 +95,9 @@ def summarize_rfp(uploaded_file):
     if not text:
         st.error("No text found in the uploaded file.")
         return None
-
+    
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are an assistant that summarizes RFP documents."},
@@ -170,7 +172,7 @@ def find_matching_providers(summary):
 
     try:
         # Ask OpenAI to evaluate all companies at once
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-4",
             messages=[
                 {
@@ -190,11 +192,10 @@ def find_matching_providers(summary):
             temperature=0.5
         )
 
-        # Extract the response content
         response_text = response.choices[0].message.content.strip()
 
         # Extract the matching company names from the response
-        available_company_names = [cd.split(':')[0] for cd in companies_data]
+        available_company_names = [cd.split(':')[0].strip() for cd in companies_data]
         matching_companies = [name.strip() for name in response_text.split(',') if name.strip() in available_company_names]
 
         if matching_companies:
