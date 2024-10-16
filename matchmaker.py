@@ -215,13 +215,12 @@ def handle_userinput(user_question, csv_data):
                 st.write(user_template.replace("{{MSG}}", modified_content), unsafe_allow_html=True)
             else:
                 st.write(bot_template.replace("{{MSG}}", modified_content), unsafe_allow_html=True)
-        # Save chat history after each interaction
         save_chat_history(st.session_state.chat_history)
     else:
-        # Directly querying the CSV file based on user input
         st.error("The conversation model is not initialized. Please wait until the model is ready.")
 
 def modify_response_language(original_response):
+    """Modify the language of the response to be more conversational."""
     response = original_response.replace(" they ", " we ")
     response = original_response.replace("They ", "We ")
     response = original_response.replace(" their ", " our ")
@@ -231,6 +230,7 @@ def modify_response_language(original_response):
     return response
 
 def save_chat_history(chat_history):
+    """Save the chat history to GitHub."""
     github_token = st.secrets["github"]["access_token"]
     headers = {
         'Accept': 'application/vnd.github.v3+json',
