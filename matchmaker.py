@@ -96,7 +96,7 @@ def summarize_rfp(uploaded_file):
     openai.api_key = st.secrets["openai_api_key"]
 
     try:
-        response = client.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are an assistant that summarizes RFP documents."},
