@@ -106,7 +106,7 @@ def summarize_rfp(uploaded_file):
             temperature=0.5
         )
         
-        summary = response['choices'][0]['message']['content'].strip()
+        summary = response.choices[0].message['content'].strip()
         return summary
 
     except Exception as e:
@@ -205,7 +205,7 @@ def get_vectorstore(text_chunks):
     return vectorstore
 
 def get_conversation_chain(vectorstore):
-    """Set up the conversational retrieval chain using LangChain."""
+    """Set up a conversation chain using the vector store."""
     llm = ChatOpenAI()
     memory = ConversationBufferMemory(memory_key='chat_history', return_messages=True)
     conversation_chain = ConversationalRetrievalChain.from_llm(llm=llm, retriever=vectorstore.as_retriever(), memory=memory)
