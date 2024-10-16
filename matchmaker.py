@@ -69,7 +69,7 @@ def main():
         st.session_state.chat_history = []
     
     if csv_data is not None:
-        text_chunks = get_text_chunks(csv_data)
+        text_chunks = get_text_chunks_from_csv(csv_data)
         if text_chunks:
             vectorstore = get_vectorstore(text_chunks)
             st.session_state.conversation = get_conversation_chain(vectorstore)
@@ -178,11 +178,16 @@ def find_matching_providers(summary, csv_data):
         st.error(f"An error occurred with the OpenAI API: {e}")
         return pd.DataFrame()
 
-def get_text_chunks(csv_data):
-    """Split the CSV data into text chunks for conversational retrieval."""
-    text = " ".join(csv_data['Primary Industry'].fillna('').tolist())
+def get_text_chunks_from_csv(csv_data):
+    """Combine and chunk the entire CSV for vector embedding."""
+    rows = []
+    for index, row in csv_data.iterrows():
+        row_text = " | ".join([f"{col}: {row[col]}" for col in csv_data.columns if not pd.isnull(row[col])])
+        rows.append(row_text)
+    
+    full_text = "\n".join(rows)
     text_splitter = CharacterTextSplitter(separator="\n", chunk_size=1000, chunk_overlap=200, length_function=len)
-    chunks = text_splitter.split_text(text)
+    chunks = text_splitter.split_text(full_text)
     return chunks
 
 def get_vectorstore(text_chunks):
