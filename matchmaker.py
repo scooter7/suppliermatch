@@ -112,7 +112,7 @@ def summarize_rfp(uploaded_file):
         )
         
         # Correct the way to handle response choices:
-        summary = response.choices[0].message["content"].strip()
+        summary = response.choices[0].message.content.strip()  # Direct content access
         return summary
 
     except Exception as e:
@@ -159,7 +159,7 @@ def find_matching_providers(summary):
         )
 
         # Correctly access the response content
-        response_text = response.choices[0].message["content"].strip()
+        response_text = response.choices[0].message.content.strip()  # Direct content access
 
         # Use regex to extract company numbers or names (assuming the company numbers/names are in the form "Company X")
         matching_companies = re.findall(r'Company\s*(\d+)', response_text)
@@ -224,7 +224,7 @@ def modify_response_language(original_response):
     response = original_response.replace(" they ", " we ")
     response = response.replace("They ", "We ")
     response = response.replace(" their ", " our ")
-    response is response.replace("Their ", "Our ")
+    response = response.replace("Their ", "Our ")
     response = response.replace(" them ", " us ")
     response = response.replace("Them ", "Us ")
     return response
