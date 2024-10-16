@@ -5,13 +5,6 @@ import requests
 import pandas as pd
 import openai
 from io import BytesIO
-from langchain_community.embeddings import OpenAIEmbeddings
-from langchain_community.vectorstores import FAISS
-from langchain_community.chat_models import ChatOpenAI
-from langchain.memory import ConversationBufferMemory
-from langchain.chains import ConversationalRetrievalChain
-from langchain.text_splitter import CharacterTextSplitter
-from htmlTemplates import css, bot_template, user_template
 from datetime import datetime
 import base64
 from PyPDF2 import PdfReader
@@ -42,7 +35,7 @@ def main():
     <div style="text-align: center;">
         <h1 style="font-weight: bold;">Strategic Insights Supplier Match</h1>
         <img src="https://oppaccess.com/integrated-research-platform/wp-content/uploads/2024/04/SI-DSjpg-2.jpg" alt="Icon" style="height:300px; width:400px;">
-        <p align="left">Ask about our suppliers or upload an RFP!</p>
+        <p align="left">Upload an RFP!</p>
     </div>
     """
     st.markdown(header_html, unsafe_allow_html=True)
@@ -58,21 +51,6 @@ def main():
             matching_providers = find_matching_providers(summary)
             st.write("Matching Providers (Filtered Company Details):")
             st.write(matching_providers)
-
-    # Add supplier query functionality after the RFP process
-    if 'conversation' not in st.session_state:
-        st.session_state.conversation = None
-    if 'chat_history' not in st.session_state:
-        st.session_state.chat_history = []
-    csv_data = get_csv_data()
-    if csv_data is not None:
-        text_chunks = get_text_chunks(csv_data)
-        if text_chunks:
-            vectorstore = get_vectorstore(text_chunks)
-            st.session_state.conversation = get_conversation_chain(vectorstore)
-    user_question = st.text_input("Ask about our suppliers:")
-    if user_question:
-        handle_userinput(user_question)
 
 def get_csv_data():
     response = requests.get(CSV_URL)
@@ -101,7 +79,7 @@ def summarize_rfp(uploaded_file):
     openai.api_key = st.secrets["openai_api_key"]
 
     try:
-        response = client.chat.completions.create(
+        response = client.ChatCompletion.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are an assistant that summarizes RFP documents."},
@@ -111,7 +89,7 @@ def summarize_rfp(uploaded_file):
             temperature=0.5
         )
         
-        summary = response.choices[0].message.content.strip()
+        summary = response['choices'][0]['message']['content'].strip()
         return summary
 
     except Exception as e:
@@ -140,14 +118,14 @@ def find_matching_providers(summary):
     companies_data = []
     for index, row in csv_data.iterrows():
         company_name = row['Company']
-        primary_industry = row['Primary Industry']
+        primary_industry = row['Primary Industry.1']  # Use the second 'Primary Industry' column
         companies_data.append(f"{company_name}: {primary_industry}")
 
     companies_text = "\n".join(companies_data)
 
     try:
         # Ask OpenAI to evaluate all companies at once
-        response = client.chat.completions.create(
+        response = client.ChatCompletion.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are an assistant that helps find companies for specific scopes of services based on their industries."},
@@ -158,9 +136,9 @@ def find_matching_providers(summary):
         )
 
         # Extract the response content
-        response_text = response.choices[0].message.content.strip()
+        response_text = response['choices'][0]['message']['content'].strip()
 
-        # Use regex to extract company numbers or names (assuming the company numbers/names are in the form "Company X")
+        # Use regex to extract company names
         matching_companies = re.findall(r'Company\s*(\d+)', response_text)
 
         if matching_companies:
@@ -179,73 +157,6 @@ def find_matching_providers(summary):
     except Exception as e:
         st.error(f"An error occurred with the OpenAI API: {e}")
         return pd.DataFrame()
-
-def get_text_chunks(csv_data):
-    # Combine all text in the 'Primary Industry' column into a single string
-    text = " ".join(csv_data['Primary Industry'].fillna('').tolist())  # Adjust column selection if needed
-    text_splitter = CharacterTextSplitter(separator="\n", chunk_size=1000, chunk_overlap=200, length_function=len)
-    chunks = text_splitter.split_text(text)
-    return chunks
-
-def get_vectorstore(text_chunks):
-    if not text_chunks:
-        raise ValueError("No text chunks available for embedding.")
-    os.environ["OPENAI_API_KEY"] = st.secrets["openai_api_key"]
-    embeddings = OpenAIEmbeddings()
-    vectorstore = FAISS.from_texts(texts=text_chunks, embedding=embeddings)
-    return vectorstore
-
-def get_conversation_chain(vectorstore):
-    llm = ChatOpenAI()
-    memory = ConversationBufferMemory(memory_key='chat_history', return_messages=True)
-    conversation_chain = ConversationalRetrievalChain.from_llm(llm=llm, retriever=vectorstore.as_retriever(), memory=memory)
-    return conversation_chain
-
-def handle_userinput(user_question):
-    if 'conversation' in st.session_state and st.session_state.conversation:
-        response = st.session_state.conversation({'question': user_question})
-        st.session_state.chat_history = response['chat_history']
-        for i, message in enumerate(st.session_state.chat_history):
-            modified_content = modify_response_language(message.content)
-            if i % 2 == 0:
-                st.write(user_template.replace("{{MSG}}", modified_content), unsafe_allow_html=True)
-            else:
-                st.write(bot_template.replace("{{MSG}}", modified_content), unsafe_allow_html=True)
-        # Save chat history after each interaction
-        save_chat_history(st.session_state.chat_history)
-    else:
-        st.error("The conversation model is not initialized. Please wait until the model is ready.")
-
-def modify_response_language(original_response):
-    response = original_response.replace(" they ", " we ")
-    response = original_response.replace("They ", "We ")
-    response = original_response.replace(" their ", " our ")
-    response = original_response.replace("Their ", "Our ")
-    response = original_response.replace(" them ", " us ")
-    response = original_response.replace("Them ", "Us ")
-    return response
-
-def save_chat_history(chat_history):
-    github_token = st.secrets["github"]["access_token"]
-    headers = {
-        'Accept': 'application/vnd.github.v3+json',
-        'Authorization': f'token {github_token}'
-    }
-    date_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    file_name = f"chat_history_{date_str}.txt"
-    chat_content = "\n\n".join(f"{'User:' if i % 2 == 0 else 'Bot:'} {message.content}" for i, message in enumerate(chat_history))
-    
-    encoded_content = base64.b64encode(chat_content.encode('utf-8')).decode('utf-8')
-    data = {
-        "message": f"Save chat history on {date_str}",
-        "content": encoded_content,
-        "branch": "main"
-    }
-    response = requests.put(f"{GITHUB_HISTORY_URL}/{file_name}", headers=headers, json=data)
-    if response.status_code == 201:
-        st.success("Chat history saved successfully.")
-    else:
-        st.error(f"Failed to save chat history: {response.status_code}, {response.text}")
 
 if __name__ == '__main__':
     main()
