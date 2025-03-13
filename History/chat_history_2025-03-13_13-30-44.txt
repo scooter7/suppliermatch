@@ -1,0 +1,9 @@
+User: landscapers
+
+Bot: Based on the provided data, there are several landscaping services companies in Los Angeles:
+
+1. Company 673 in Sun Valley, Los Angeles
+2. Company 1239 in Lancaster, Los Angeles
+3. Company 114 in Covina, Los Angeles
+
+These companies offer landscaping services as part of their professional services.
