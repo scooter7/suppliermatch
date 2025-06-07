@@ -40,7 +40,6 @@ def main():
     header_html = """
     <div style="text-align: center;">
         <h1 style="font-weight: bold;">Strategic Insights Supplier Match</h1>
-        <img src="https://oppaccess.com/integrated-research-platform/wp-content/uploads/2024/04/SI-DSjpg-2.jpg" alt="Icon" style="height:300px; width:400px;">
         <p align="left">Upload an RFP!</p>
     </div>
     """
