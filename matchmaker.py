@@ -40,7 +40,6 @@ def main():
     header_html = """
     <div style="text-align: center;">
         <h1 style="font-weight: bold;">Strategic Insights Supplier Match</h1>
-        <p align="left">Upload an RFP!</p>
     </div>
     """
     st.markdown(header_html, unsafe_allow_html=True)
