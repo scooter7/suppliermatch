@@ -20,7 +20,6 @@ def main():
     # Set page config
     st.set_page_config(
         page_title="Strategic Insights Supplier Match",
-        page_icon="https://strategicinsights.com/wp-content/uploads/2024/04/logo2.png"
     )
     
     # Hide the Streamlit toolbar
